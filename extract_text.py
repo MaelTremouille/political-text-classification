@@ -4,13 +4,14 @@ from pathlib import Path
 from tqdm import tqdm
 
 # load the  export
-open_database(Path("sciencespo-archelec-20260129-223203.sqlite"))
+open_database(Path("sciencespo-archelec-20260213-165557.sqlite"))
 # create a folder to store the text files
 TEXT_FOLDER = "text_files"
 output_folder = Path(TEXT_FOLDER)
 output_folder.mkdir(exist_ok=True)
-for year in ['1981']:
-    for type in ['legislatives', 'presidentielle']:
+for year in ['1993']:
+    # ['legislatives', 'presidentielle']
+    for type in ['legislatives']:
         # create the folder
         year_folder = output_folder / year
         year_folder.mkdir(exist_ok=True)
@@ -21,12 +22,13 @@ for year in ['1981']:
 print("Number of folders", Element.select().where(Element.type == 'folder').count())
 print("Number of pages:", Element.select().where(Element.type == 'page').count())
 
-legislatives_1981_id = 'd51ea3db-68ee-4cc0-a87f-736ee17c5f87'
+#legislatives_1981_id = 'd51ea3db-68ee-4cc0-a87f-736ee17c5f87'
 #presidentielle_1981_id = '4192aaa9-8485-433a-b0e3-559d2259e067'
-year = '1981'
+legislatives_1993_id = '2d71d778-ce90-424e-9313-8b208113e512'
+year = '1993'
 type = 'legislatives'
 # list all documents in legislative_1981_id
-documents = list_children(legislatives_1981_id).where(Element.type == 'document')
+documents = list_children(legislatives_1993_id).where(Element.type == 'document')
 
 # number of documents
 print("Number of documents", documents.count())
