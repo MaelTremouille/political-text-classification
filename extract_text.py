@@ -1,17 +1,63 @@
-from arkindex_export import open_database, Element, Metadata, Transcription
+import sqlite3
+from arkindex_export import open_database, Element, Metadata, Transcription, database
 from arkindex_export.queries import list_children
 from pathlib import Path
 from tqdm import tqdm
 
+DB_PATH = Path("sciencespo-archelec-20260217-121320.sqlite")
+
+
+
+
+def index_database(db_path: Path, vacuum: bool = False):
+    """
+    Add performance indexes to an Arkindex SQLite export.
+    """
+
+    # Initialize database connection
+    open_database(db_path)
+
+    if database.is_closed():
+        database.connect()
+
+    with database.atomic():
+        # Critical for recursive CTE performance
+        database.execute_sql("""
+            CREATE INDEX IF NOT EXISTS idx_elementpath_parent_child
+            ON element_path(parent_id, child_id);
+        """)
+
+        database.execute_sql("""
+            CREATE INDEX IF NOT EXISTS idx_elementpath_child
+            ON element_path(child_id);
+        """)
+
+        # Useful if filtering on Element.type
+        database.execute_sql("""
+            CREATE INDEX IF NOT EXISTS idx_element_type
+            ON element(type);
+        """)
+
+    if vacuum:
+        print("Running VACUUM (this may take time)...")
+        database.execute_sql("VACUUM;")
+
+    database.close()
+
+    print("Indexing completed.")
+
+
+# Index the database before opening it
+index_database(DB_PATH)
+
 # load the  export
-open_database(Path("sciencespo-archelec-20260213-165557.sqlite"))
+open_database(DB_PATH)
 # create a folder to store the text files
 TEXT_FOLDER = "text_files"
 output_folder = Path(TEXT_FOLDER)
 output_folder.mkdir(exist_ok=True)
-for year in ['1993']:
-    # ['legislatives', 'presidentielle']
-    for type in ['legislatives']:
+for year in ['1981', '1988', '1993']:
+    for type in ['legislatives', 'presidentielle']:
         # create the folder
         year_folder = output_folder / year
         year_folder.mkdir(exist_ok=True)
@@ -24,8 +70,8 @@ print("Number of pages:", Element.select().where(Element.type == 'page').count()
 
 #legislatives_1981_id = 'd51ea3db-68ee-4cc0-a87f-736ee17c5f87'
 #presidentielle_1981_id = '4192aaa9-8485-433a-b0e3-559d2259e067'
-legislatives_1993_id = '2d71d778-ce90-424e-9313-8b208113e512'
-year = '1993'
+legislatives_1993_id = '8543cd16-364d-4c41-ae75-63845eb38587'
+year = '1988'
 type = 'legislatives'
 # list all documents in legislative_1981_id
 documents = list_children(legislatives_1993_id).where(Element.type == 'document')
