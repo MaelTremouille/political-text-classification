@@ -1,28 +1,15 @@
-# Arkindex Archelec
+# Discourse versus Economic Reality
 
-## How to access the transcriptions ?
+This project was originally cloned from https://gitlab.teklia.com/ckermorvant/arkindex_archelec.git
 
-The transcriptions have been extracted form Arkindex using the script extract_text.py and are stored in the directory text_files in zip files. 
+## How to access the transcriptions?
 
-## How to extract the transcriptions from Arkindex
+The transcriptions have been extracted from Arkindex and are stored in the directory `text_files/` as zip files.
 
-* Install the arkindex client
+## How to extract the transcriptions
+
+Run the extraction script to unzip and load the text files:
+
 ```
- virtualenv -p python3.11 venv
- source venv/bin/activate
- pip install arkindex-export
- ````
-
-
-* Download the Arkindex archive
-
-- go to https://demo.arkindex.org/browse/1bc39ca6-399b-47ca-9de1-ab2ef481cabb?top_level=true&folder=true
-- menu Import/Export -> Manage database exports
-- download the latest archive
-
-
-* Run the extraction script
-
-````
 python extract_text.py
 ```
