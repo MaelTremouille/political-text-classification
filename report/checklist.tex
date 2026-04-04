@@ -1,0 +1,71 @@
+\section*{NeurIPS Paper Checklist}
+
+\begin{enumerate}
+
+\item {\bf Claims}
+    \item[] Question: Do the main claims made in the abstract and introduction accurately reflect the paper's contributions and scope?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The abstract and introduction clearly state the three contributions: labeled dataset construction, model comparison, and semantic mapping.
+
+\item {\bf Limitations}
+    \item[] Question: Does the paper discuss the limitations of the work performed by the authors?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: Section~6 discusses OCR quality, regex labeling noise, class imbalance, document truncation, and t-SNE interpretation caveats.
+
+\item {\bf Theory assumptions and proofs}
+    \item[] Answer: \answerNA{}
+    \item[] Justification: This paper is empirical and does not include theoretical results.
+
+\item {\bf Experimental result reproducibility}
+    \item[] Answer: \answerYes{}
+    \item[] Justification: All hyperparameters, data splits, and model choices are described. Code is provided in the GitHub repository.
+
+\item {\bf Open access to data and code}
+    \item[] Answer: \answerYes{}
+    \item[] Justification: Code is available on GitHub. The corpus is publicly available through the Archelec project.
+
+\item {\bf Experimental setting/details}
+    \item[] Answer: \answerYes{}
+    \item[] Justification: Section~4 details all training parameters (learning rate, batch size, epochs, optimizer, TF-IDF settings).
+
+\item {\bf Experiment statistical significance}
+    \item[] Answer: \answerNo{}
+    \item[] Justification: We report single-run results without error bars due to computational constraints. The deterministic train/test split and fixed random seed ensure reproducibility.
+
+\item {\bf Experiments compute resources}
+    \item[] Answer: \answerYes{}
+    \item[] Justification: Appendix~A reports the hardware used (Apple M-series, MPS backend) and approximate training times.
+
+\item {\bf Code of ethics}
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The research uses publicly available historical documents and does not raise ethical concerns.
+
+\item {\bf Broader impacts}
+    \item[] Answer: \answerNA{}
+    \item[] Justification: This is an academic study of historical political texts with no direct deployment implications.
+
+\item {\bf Safeguards}
+    \item[] Answer: \answerNA{}
+    \item[] Justification: The models are trained on public historical data and pose no misuse risk.
+
+\item {\bf Licenses for existing assets}
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The Archelec corpus is cited and its source URL provided. CamemBERT is cited with its original publication.
+
+\item {\bf New assets}
+    \item[] Answer: \answerNA{}
+    \item[] Justification: No new datasets or models are released.
+
+\item {\bf Crowdsourcing and research with human subjects}
+    \item[] Answer: \answerNA{}
+    \item[] Justification: No human subjects were involved.
+
+\item {\bf Institutional review board (IRB) approvals or equivalent for research with human subjects}
+    \item[] Answer: \answerNA{}
+    \item[] Justification: No human subjects were involved.
+
+\item {\bf Declaration of LLM usage}
+    \item[] Answer: \answerNA{}
+    \item[] Justification: No LLM is used as a component of the core methodology. CamemBERT is a pretrained encoder model fine-tuned for classification, not used as a generative LLM.
+
+\end{enumerate}
