@@ -1,0 +1,390 @@
+\documentclass{article}
+
+\usepackage[preprint]{neurips_2026}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{subcaption}
+
+\graphicspath{{../figures/}}
+
+\title{Political affiliation classification from French legislative campaign manifestos (1973--1993)}
+
+\author{%
+  Mael Tremouille \\
+  ENSAE Paris \\
+  \texttt{mael.tremouille@ensae.fr}
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We investigate whether political affiliation can be predicted from the text of French legislative campaign manifestos (\textit{professions de foi}) spanning five elections between 1973 and 1993.
+Working with a corpus of 4{,}519 documents from the Archelec archive, we extract party labels via rule-based pattern matching and frame the task as a four-class classification problem over broad political families.
+We compare a TF-IDF logistic regression baseline against a fine-tuned CamemBERT model.
+The baseline achieves 84\% accuracy, while CamemBERT reaches 71\% despite several optimization attempts, suggesting that simple word-level features are sufficient for this formulaic corpus.
+We further analyze inter-party semantic proximity using sentence-transformer embeddings projected via t-SNE and cosine similarity.
+\end{abstract}
+
+%----------------------------------------------------------------------
+\section{Introduction}
+\label{sec:intro}
+%----------------------------------------------------------------------
+
+In France, \textit{professions de foi} are official campaign statements distributed to all registered voters before legislative elections. They form a standardized corpus well-suited for studying political discourse at scale.
+
+We ask the following question: \textbf{can we predict a candidate's political affiliation from the text alone, without any explicit party mention?} If so, what features distinguish each political family? And how do parties relate to one another in a semantic embedding space?
+
+We use the Archelec corpus~\citep{archelec}, which contains digitized and OCR'd professions de foi from French legislative elections held in 1973, 1978, 1981, 1988, and 1993. This period covers major political shifts in France: the Union of the Left, the first Socialist presidency, the rise of the Front National, and cohabitation governments.
+
+Our approach is as follows. First, we build a labeled dataset by extracting party mentions from the text using regular expressions, then removing these mentions to prevent data leakage (Section~\ref{sec:data}). Second, we compare a TF-IDF logistic regression baseline with a fine-tuned CamemBERT model~\citep{martin2020camembert} (Section~\ref{sec:models}). Third, we analyze inter-party distances through sentence-transformer embeddings (Section~\ref{sec:results}).
+
+%----------------------------------------------------------------------
+\section{Related work}
+\label{sec:related}
+%----------------------------------------------------------------------
+
+\paragraph{Text-based political analysis.}
+The computational analysis of political texts has a long history. Early approaches used word frequency methods and dictionary-based techniques~\citep{laver2003extracting} to position parties on ideological scales. The Manifesto Project~\citep{volkens2013manifesto} enabled large-scale quantitative comparisons of party platforms across countries. More recently, word embeddings have been applied to ideological language analysis~\citep{rheault2020word}, and transformer-based models have been used for political speech classification in English~\citep{biessmann2016measuring}.
+
+\paragraph{NLP for French political texts.}
+French-language political NLP is less explored. \citet{hoareau2023analyse} studied parliamentary debates with topic models. The Archelec project~\citep{archelec} has motivated work on OCR quality and metadata extraction, but few studies tackle political classification from professions de foi at scale.
+
+\paragraph{CamemBERT.}
+CamemBERT~\citep{martin2020camembert} is a RoBERTa-based model pretrained on a large French corpus. It achieves state-of-the-art results on French NLP benchmarks including text classification, making it a natural choice for our task.
+
+%----------------------------------------------------------------------
+\section{Data}
+\label{sec:data}
+%----------------------------------------------------------------------
+
+\subsection{Corpus description}
+
+The Archelec corpus consists of scanned and OCR'd professions de foi from French legislative elections. Each raw file corresponds to a single scanned page, following a naming convention that encodes metadata: election identifier, year, department code, constituency number, election round, and document type.
+
+We keep only professions de foi (tagged \texttt{PF}), discarding ballots (\texttt{BV}) and OCR processing artifacts (\texttt{pdfmasterocr}). Multi-page documents belonging to the same candidate are concatenated in page order to reconstruct complete texts. After aggregation, the corpus contains 4{,}658 documents spanning five election years.
+
+\subsection{Label extraction}
+\label{sec:labels}
+
+The corpus does not include structured party labels. We extract them from the text itself using a two-stage regex approach:
+
+\begin{enumerate}
+    \item \textbf{Full name patterns}: we search the entire text for explicit party names (e.g., \textit{Parti Communiste Fran\c{c}ais}, \textit{Rassemblement pour la R\'{e}publique}). Patterns handle OCR variants (accented and unaccented characters, variable spacing). They are ordered from most specific to least specific to avoid ambiguous matches.
+    \item \textbf{Abbreviation patterns}: for remaining unlabeled documents, we search the first 1{,}000 characters for common acronyms (e.g., PS, RPR, UDF), restricting to the header area to limit false positives from opponents mentioned in the text body.
+\end{enumerate}
+
+This procedure labels 97.8\% of documents (4{,}557 out of 4{,}658). We identify 17 distinct party labels, which we group into five political families: \textit{Extr\^{e}me gauche} (LO, LCR), \textit{Gauche} (PCF, PS, PSU, MRG), \textit{\'{E}cologistes} (Verts), \textit{Droite} (RPR, UDF, UDR, RI, and coalition labels), and \textit{Extr\^{e}me droite} (FN, PFN).
+
+We discard the \'{E}cologistes class (38 documents), which is too small for meaningful classification. The final dataset contains \textbf{4{,}519 documents} over four political families.
+
+\paragraph{Data leakage prevention.}
+Since we aim to classify political affiliation from discourse content rather than explicit party names, we remove all party mentions from the text using the same regex patterns. This produces a cleaned text column used for all modeling.
+
+\subsection{Dataset statistics}
+
+Table~\ref{tab:distribution} shows the distribution across political families and election years. The dataset is heavily imbalanced: Gauche represents 60\% of documents, while Extr\^{e}me droite accounts for only 1.4\%.
+
+\begin{table}[h]
+  \caption{Number of labeled documents by political family and election year.}
+  \label{tab:distribution}
+  \centering
+  \begin{tabular}{lccccc|c}
+    \toprule
+    Family & 1973 & 1978 & 1981 & 1988 & 1993 & Total \\
+    \midrule
+    Extr\^{e}me gauche & 274 & 473 & 178 & 0 & 241 & 1{,}166 \\
+    Gauche              & 564 & 374 & 568 & 763 & 444 & 2{,}713 \\
+    Droite              & 27  & 36  & 51  & 227 & 237 & 578 \\
+    Extr\^{e}me droite  & 1   & 0   & 0   & 3   & 58  & 62 \\
+    \midrule
+    Total               & 866 & 883 & 797 & 993 & 980 & 4{,}519 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+This imbalance reflects a bias in our extraction method: left-wing parties (especially PCF and LO) systematically state their party name in their professions de foi, while right-wing candidates more often present themselves under coalition labels or without explicit party mention.
+
+We split the data into train (70\%, 3{,}163 documents), validation (15\%, 678), and test (15\%, 678) using stratified sampling on the political family label.
+
+%----------------------------------------------------------------------
+\section{Models}
+\label{sec:models}
+%----------------------------------------------------------------------
+
+We frame political affiliation prediction as a four-class classification task. We train two models of increasing complexity.
+
+\subsection{Baseline: TF-IDF + logistic regression}
+
+We represent each document as a TF-IDF vector with up to 20{,}000 features, including unigrams and bigrams, with a minimum document frequency of~3. We train a logistic regression classifier with balanced class weights and L2 regularization.
+
+This baseline is simple and fast to train. It captures which words and bigrams are most predictive of each class. Importantly, it sees the \emph{entire} document regardless of length, unlike transformer-based models which truncate to 512 tokens.
+
+\subsection{CamemBERT fine-tuning}
+
+We fine-tune \texttt{camembert-base}~\citep{martin2020camembert} for sequence classification. A classification head (two linear layers) is added on top of the \texttt{[CLS]} token representation. Input texts are tokenized with a maximum length of 512 tokens; longer documents are truncated.
+
+We explored several training configurations (Table~\ref{tab:configs}), varying the number of epochs, the use of class-weighted cross-entropy loss, and the use of a linear learning rate scheduler with 10\% warmup.
+
+\begin{table}[h]
+  \caption{CamemBERT training configurations and test accuracy.}
+  \label{tab:configs}
+  \centering
+  \begin{tabular}{ccccc}
+    \toprule
+    Run & Epochs & Weighted loss & LR scheduler & Test accuracy \\
+    \midrule
+    1 & 3 & Yes & No  & 68\% \\
+    2 & 5 & Yes & Yes & 71\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+All runs use AdamW with a learning rate of $2 \times 10^{-5}$, weight decay of 0.01, and a batch size of 8. Training is performed on an Apple M-series GPU (MPS backend).
+
+\subsection{Semantic mapping}
+
+Beyond classification, we extract document embeddings to visualize inter-party semantic proximity. We initially used the \texttt{[CLS]} token from the pretrained CamemBERT base model, but found that all pairwise cosine similarities exceeded 0.98, making the representations uninformative (see Appendix~\ref{app:cls_failure}). This is expected: the base model encodes grammatical structure rather than semantic content, and all professions de foi share a similar formal register.
+
+We therefore use a sentence-transformer model (\texttt{dangvantuan/sentence-camembert-large}), which was specifically trained to produce embeddings that reflect semantic similarity. It uses mean pooling over all token representations instead of the \texttt{[CLS]} token alone.
+
+We compute mean embeddings per party and per political family, then apply t-SNE for 2D projection and cosine similarity for pairwise comparison.
+
+%----------------------------------------------------------------------
+\section{Experiments and results}
+\label{sec:results}
+%----------------------------------------------------------------------
+
+\subsection{Classification performance}
+
+Table~\ref{tab:results} reports test set results for both models.
+
+\begin{table}[h]
+  \caption{Test set performance. TF-IDF outperforms CamemBERT across all metrics.}
+  \label{tab:results}
+  \centering
+  \begin{tabular}{lccc}
+    \toprule
+    Model & Accuracy & Macro F1 & Weighted F1 \\
+    \midrule
+    TF-IDF + Logistic Regression & \textbf{0.84} & \textbf{0.80} & \textbf{0.85} \\
+    CamemBERT (best, Run 2)     & 0.71          & 0.65          & 0.72 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Per-class analysis.}
+Table~\ref{tab:per_class} shows per-class F1 scores.
+
+\begin{table}[h]
+  \caption{Per-class F1 scores on the test set.}
+  \label{tab:per_class}
+  \centering
+  \begin{tabular}{lcc}
+    \toprule
+    Family & TF-IDF + LR & CamemBERT \\
+    \midrule
+    Extr\^{e}me gauche & 0.96 & 0.73 \\
+    Gauche              & 0.86 & 0.76 \\
+    Droite              & 0.60 & 0.54 \\
+    Extr\^{e}me droite  & 0.76 & 0.57 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The TF-IDF baseline outperforms CamemBERT on every class. Extr\^{e}me gauche is the easiest to classify (F1 = 0.96): LO and LCR use a highly distinctive Marxist vocabulary. Droite is the hardest (F1 = 0.60): once party names are removed, right-wing and left-wing candidates discuss similar themes (employment, housing, education) with overlapping vocabulary.
+
+\paragraph{Confusion analysis.}
+The main source of errors is the Droite--Gauche confusion: 76 Gauche documents are misclassified as Droite by the TF-IDF model. This suggests that, beyond party-specific keywords, the discourse of mainstream left and right shares significant common ground --- a finding consistent with the political convergence observed during this period.
+
+\paragraph{Why does CamemBERT underperform?}
+We observe clear signs of overfitting during CamemBERT training: the training loss decreases steadily across epochs (from 1.18 to 0.43 over 5 epochs), but validation accuracy plateaus at $\sim$72\% after epoch 2. Several factors explain this:
+
+\begin{itemize}
+    \item \textbf{Small dataset}: with 3{,}163 training examples and 110 million parameters, CamemBERT has far more capacity than needed, leading to memorization.
+    \item \textbf{Formulaic corpus}: professions de foi reuse party-specific keywords systematically. Simple word counting (TF-IDF) captures this signal efficiently; contextual understanding adds little.
+    \item \textbf{Truncation}: CamemBERT processes only the first 512 tokens, while TF-IDF uses the full document.
+    \item \textbf{Class imbalance}: despite weighted loss, the 43 Extr\^{e}me droite training examples are insufficient for the model to learn robust patterns.
+\end{itemize}
+
+This result is not a failure of the modeling choice but rather a consequence of the dataset characteristics. The literature shows that pretrained transformers typically outperform baselines when training data exceeds 10{,}000 examples~\citep{martin2020camembert}.
+
+\subsection{Semantic mapping}
+\label{sec:mapping}
+
+\paragraph{t-SNE projection.}
+Figure~\ref{fig:tsne} shows the t-SNE projection of document embeddings colored by political family. The most visible pattern is a partial separation between left-wing and right-wing documents: Droite (blue) concentrates on the left side of the projection, while Gauche and Extr\^{e}me gauche (red tones) spread across the right side. However, the overlap remains substantial, especially in the center. This confirms what the classification results suggest: beyond a few distinctive markers, the political discourse of this period is relatively homogeneous in terms of themes and register.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.9\linewidth]{tsne_by_family.png}
+  \caption{t-SNE projection of document embeddings colored by political family. Partial left-right separation is visible but overlap is significant.}
+  \label{fig:tsne}
+\end{figure}
+
+\paragraph{Inter-party similarity.}
+Figure~\ref{fig:cosine} shows cosine similarity between mean party embeddings. Most pairs have similarity above 0.90, consistent with the shared formal register of professions de foi. Several patterns stand out. The RPCR (Rassemblement pour la Cal\'{e}donie dans la R\'{e}publique), a regionalist party from New Caledonia, has the lowest similarity with all other parties (0.70--0.78), reflecting a discourse centered on overseas territorial issues that differs sharply from metropolitan politics. Within the left bloc, LO and PSU show slightly lower similarity with right-wing parties (RPR, UDF) than do PS or MRG. Within the right, UDR stands somewhat apart, likely reflecting the older Gaullist vocabulary of the early 1970s.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.85\linewidth]{cosine_similarity_parties.png}
+  \caption{Cosine similarity between mean party embeddings (sentence-transformer). The RPCR stands out as an outlier; other parties cluster above 0.88.}
+  \label{fig:cosine}
+\end{figure}
+
+\paragraph{Temporal evolution.}
+Figure~\ref{fig:temporal} projects mean embeddings per family and per election year onto a 2D t-SNE space. With only 18 data points (family $\times$ year combinations where data exists), this visualization should be interpreted cautiously. We note that embeddings from the same political family do not cluster tightly together across years, suggesting that temporal variation within a family may be as large as ideological variation between families. The Ecologistes, present only in 1993, appear isolated, which is consistent with their small sample size.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.9\linewidth]{tsne_temporal_evolution.png}
+  \caption{t-SNE of mean embeddings per political family and election year. Low point count limits interpretability.}
+  \label{fig:temporal}
+\end{figure}
+
+%----------------------------------------------------------------------
+\section{Discussion}
+\label{sec:discussion}
+%----------------------------------------------------------------------
+
+\paragraph{Political discourse is identifiable from text.}
+Even after removing explicit party mentions, a simple TF-IDF model achieves 84\% accuracy on four-class classification. This confirms that each political family maintains a distinctive vocabulary and set of themes. The far left is most distinctive, while mainstream left and right share more common ground. The semantic mapping results reinforce this: the cosine similarity heatmap (Figure~\ref{fig:cosine}) shows that most parties are highly similar ($> 0.90$), with only the RPCR --- a geographically and thematically distinct party --- falling clearly apart.
+
+\paragraph{Model complexity is not always beneficial.}
+CamemBERT, despite being a much more powerful model, does not outperform the TF-IDF baseline on this task. This illustrates that model selection should be driven by dataset characteristics, not by model sophistication alone. When the discriminative signal lies in individual words rather than contextual meaning, a bag-of-words approach is sufficient and preferable.
+
+\paragraph{Embedding model choice matters.}
+Our initial attempt at semantic mapping using the \texttt{[CLS]} token from CamemBERT base produced uniformly high cosine similarities ($> 0.98$), making the representations uninformative (Appendix~\ref{app:cls_failure}). Switching to a sentence-transformer trained for semantic similarity resolved this, yielding meaningful variation in inter-party distances. This highlights an important practical lesson: pretrained encoder models are not interchangeable for downstream tasks, and task-specific fine-tuning (or models trained with appropriate objectives) is necessary even for unsupervised analyses.
+
+\paragraph{Limitations of label extraction.}
+Our regex-based labeling introduces a selection bias: parties that explicitly state their name (PCF, LO, PS) are over-represented, while right-wing candidates who present themselves under coalition labels are under-captured. This results in a dataset that is both imbalanced and not fully representative of the actual political landscape. A more complete labeling approach could cross-reference candidates with external databases of election results.
+
+\paragraph{OCR noise.}
+The texts were produced by automatic OCR on scanned documents. Quality varies across years, with older elections (1973, 1978) showing more degradation. We apply no OCR correction, which adds noise to both feature extraction and classification.
+
+\paragraph{Document truncation.}
+CamemBERT's 512-token limit discards a significant portion of longer professions de foi. Since the TF-IDF baseline uses the full text, this truncation may partly explain CamemBERT's lower performance. Alternative strategies (chunked encoding, hierarchical models) could address this but add complexity.
+
+\paragraph{t-SNE interpretation.}
+The t-SNE visualizations (Figures~\ref{fig:tsne} and~\ref{fig:temporal}) should be interpreted with care. t-SNE preserves local structure but distorts global distances, and results depend on the perplexity parameter. The temporal evolution plot (Figure~\ref{fig:temporal}) has only 18 points, which is at the lower limit for meaningful t-SNE projections. These plots provide qualitative support but should not be over-interpreted.
+
+%----------------------------------------------------------------------
+\section{Conclusion}
+\label{sec:conclusion}
+%----------------------------------------------------------------------
+
+We showed that political affiliation can be predicted from French legislative campaign manifestos with 84\% accuracy using TF-IDF and logistic regression. A fine-tuned CamemBERT model does not improve on this baseline, reaching 71\% due to overfitting on a small, imbalanced dataset. This result suggests that the political discourse of 1973--1993 is characterized by distinctive party-specific keywords rather than subtle contextual differences.
+
+The semantic analysis using sentence-transformer embeddings confirms this picture: while parties can be distinguished --- particularly at the extremes of the political spectrum --- the overall discourse remains highly similar across families, with most pairwise cosine similarities above 0.90. The main exception is the RPCR, whose regionalist focus makes it a clear outlier.
+
+Future work could improve labeling coverage by cross-referencing with structured electoral databases, extend the analysis to more recent elections where party discourse may have diverged further, and test longer-context models to avoid truncation effects.
+
+\begin{ack}
+This work was conducted as part of the NLP course at ENSAE Paris (2025--2026). We thank the Archelec project at Sciences Po for making the corpus available.
+\end{ack}
+
+\bibliographystyle{plainnat}
+
+\begin{thebibliography}{10}
+
+\bibitem[Archelec(2023)]{archelec}
+Sciences~Po, CEVIPOF.
+\newblock Archelec -- Archives \'{E}lectorales.
+\newblock \url{https://archelec.sciencespo.fr}, 2023.
+
+\bibitem[Biessmann et~al.(2016)]{biessmann2016measuring}
+F.~Biessmann, P.~Ruber, T.~Shl\"uter, S.~Preibusch, and D.~Schnitzler.
+\newblock Semantics of political speeches: predicting party affiliation from legislative texts.
+\newblock In \emph{AAAI Workshop on Artificial Intelligence for Cities}, 2016.
+
+\bibitem[Hoareau et~al.(2023)]{hoareau2023analyse}
+E.~Hoareau, J.~Bourdoncle, and P.~Loiseau.
+\newblock Analyse th\'{e}matique des d\'{e}bats parlementaires fran\c{c}ais par mod\`{e}les de topics.
+\newblock In \emph{TALN 2023}, 2023.
+
+\bibitem[Laver et~al.(2003)]{laver2003extracting}
+M.~Laver, K.~Benoit, and J.~Garry.
+\newblock Extracting policy positions from political texts using words as data.
+\newblock \emph{American Political Science Review}, 97(2):311--331, 2003.
+
+\bibitem[Martin et~al.(2020)]{martin2020camembert}
+L.~Martin, B.~Muller, P.~J.~Ortiz~Su\'{a}rez, Y.~Dupont, L.~Romary, E.~de~la~Clergerie, D.~Seddah, and B.~Sagot.
+\newblock CamemBERT: a tasty French language model.
+\newblock In \emph{Proceedings of ACL}, pages 7203--7219, 2020.
+
+\bibitem[Rheault and Cochrane(2020)]{rheault2020word}
+L.~Rheault and C.~Cochrane.
+\newblock Word embeddings for the analysis of ideological placement in parliamentary corpora.
+\newblock \emph{Political Analysis}, 28(1):112--133, 2020.
+
+\bibitem[Volkens et~al.(2013)]{volkens2013manifesto}
+A.~Volkens, P.~Lehmann, N.~Merz, S.~Regel, and A.~Werner.
+\newblock The Manifesto Data Collection.
+\newblock \emph{Manifesto Project (MRG/CMP/MARPOR)}, Version 2013a, 2013.
+
+\end{thebibliography}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\appendix
+
+\section{Implementation details}
+\label{app:implementation}
+
+All code is available in the GitHub repository accompanying this report. The pipeline consists of four scripts:
+
+\begin{enumerate}
+    \item \texttt{data\_preparation.py}: parses raw text files, filters professions de foi, aggregates multi-page documents, and produces a Parquet file.
+    \item \texttt{label\_extraction.py}: extracts party labels via regex, removes party mentions from text, assigns political families, and creates stratified train/val/test splits.
+    \item \texttt{classification.py}: trains the TF-IDF baseline and fine-tunes CamemBERT, evaluates both on the test set, and saves results.
+    \item \texttt{political\_mapping.py}: extracts sentence-transformer embeddings, computes similarity matrices, and produces visualization figures.
+\end{enumerate}
+
+CamemBERT fine-tuning was performed on an Apple M-series chip (MPS backend). Each training epoch takes approximately 10 minutes.
+
+\section{CamemBERT training configurations}
+\label{app:training}
+
+We tested multiple CamemBERT configurations to improve performance:
+
+\begin{itemize}
+    \item \textbf{Without class weighting} (5 classes, 3 epochs): the model predicts the majority class (Gauche) for most inputs, achieving 75\% accuracy but 0\% recall on minority classes.
+    \item \textbf{With class weighting} (5 classes, 3 epochs): weighted cross-entropy loss forces attention to minority classes, but \'{E}cologistes (weight $= 23.6\times$) destabilizes training. Test accuracy: 60\%.
+    \item \textbf{4 classes, weighted, no scheduler} (3 epochs): removing \'{E}cologistes stabilizes training. Test accuracy: 68\%.
+    \item \textbf{4 classes, weighted, with scheduler} (5 epochs): linear warmup and decay of learning rate. Test accuracy: 71\%. Overfitting observed from epoch 3 onward (training loss decreases while validation accuracy stagnates).
+\end{itemize}
+
+In all cases, the TF-IDF baseline (84\%) outperforms CamemBERT.
+
+\section{CamemBERT base embeddings}
+\label{app:cls_failure}
+
+Our initial approach for semantic mapping used the \texttt{[CLS]} token embedding from the pretrained (not fine-tuned) CamemBERT base model. We computed cosine similarity between mean embeddings per party and found that all pairwise similarities exceeded 0.98 (Figure~\ref{fig:cls_heatmap}). The resulting heatmap was uninformative: all parties appeared equally similar.
+
+This is because CamemBERT base was trained for masked language modeling, not semantic similarity. Its \texttt{[CLS]} token primarily encodes syntactic and stylistic information. Since all professions de foi share a similar formal French register, their \texttt{[CLS]} representations converge.
+
+We addressed this by switching to a sentence-transformer model (\texttt{dangvantuan/sentence-camembert-large}) trained specifically for semantic similarity, which uses mean pooling over all tokens rather than the \texttt{[CLS]} token alone. The resulting heatmap (Figure~\ref{fig:cosine}) shows meaningful variation (0.70--1.00), validating this choice.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.75\linewidth]{cosine_similarity_parties_base.png}
+  \caption{Cosine similarity between mean party embeddings using CamemBERT base \texttt{[CLS]} token. All values exceed 0.98, making the representation uninformative for discriminating parties.}
+  \label{fig:cls_heatmap}
+\end{figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\input{checklist.tex}
+
+\end{document}
