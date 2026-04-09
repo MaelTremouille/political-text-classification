@@ -1,3 +1,12 @@
+"""
+Train and evaluate two classifiers on the professions de foi corpus:
+1) TF-IDF + logistic regression (baseline)
+2) Fine-tuned CamemBERT
+
+Results are printed and appended to data/results.txt.
+The CamemBERT model is saved to data/camembert_classifier/.
+"""
+
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
@@ -14,7 +23,7 @@ TARGET = "party_family"
 # --- Baseline: TF-IDF + Logistic Regression ---
 print("=== Baseline: TF-IDF + Logistic Regression ===\n")
 
-# Fit TF-IDF on train, transform val and test
+# TF-IDF: up to 20k features, unigrams + bigrams, min 3 docs per term
 tfidf = TfidfVectorizer(max_features=20000, ngram_range=(1, 2), min_df=3)
 X_train = tfidf.fit_transform(train_df["text_clean"])
 X_val = tfidf.transform(val_df["text_clean"])
@@ -102,7 +111,7 @@ model = AutoModelForSequenceClassification.from_pretrained(
 )
 model.to(DEVICE)
 
-# Compute class weights to handle imbalance
+# Class weights to handle imbalance (Extreme droite has very few examples)
 from sklearn.utils.class_weight import compute_class_weight
 class_weights = compute_class_weight("balanced", classes=np.array(range(num_labels)), y=[label2id[l] for l in train_df[TARGET]])
 class_weights = torch.tensor(class_weights, dtype=torch.float).to(DEVICE)
@@ -110,7 +119,7 @@ loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights)
 print(f"Class weights: {dict(zip(label_list, class_weights.cpu().numpy().round(2)))}")
 
 optimizer = AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
-NUM_EPOCHS = 5
+NUM_EPOCHS = 5  # overfitting starts around epoch 3, but we log everything
 
 from transformers import get_linear_schedule_with_warmup
 total_steps = len(train_loader) * NUM_EPOCHS

@@ -1,3 +1,12 @@
+"""
+Extract party labels from professions de foi using regex, then clean the
+text to remove party mentions (avoid data leakage for classification).
+Also assigns political families and creates train/val/test splits.
+
+Input: data/corpus_by_document.parquet
+Output: data/corpus_labeled.parquet, data/{train,val,test}.parquet
+"""
+
 import re
 import pandas as pd
 from pathlib import Path
@@ -8,7 +17,8 @@ OUTPUT_PATH = Path("data/corpus_labeled.parquet")
 df = pd.read_parquet(INPUT_PATH)
 
 # Party patterns: (regex, label)
-# Order matters: more specific patterns first to avoid wrong matches
+# Important: more specific patterns go first (e.g. "Parti Socialiste Unifié"
+# before "Parti Socialiste") to avoid mislabeling
 PARTY_PATTERNS = [
     # Extreme left
     (r"LUTTE\s+OUVRI[EÈ]RE", "LO"),
@@ -47,8 +57,8 @@ PARTY_PATTERNS = [
     (r"RASSEMBLEMENT\s+DES\s+FORCES\s+DE\s+GAUCHE", "Union Gauche"),
 ]
 
-# Short abbreviations — only matched in the header (first 1000 chars)
-# to avoid false positives deeper in the text
+# Abbreviations — only search in the first 1000 chars (roughly the header)
+# because "PS" or "RPR" deeper in the text might refer to an opponent
 ABBREV_PATTERNS = [
     (r"\bP\.?C\.?F\.?\b", "PCF"),
     (r"\bP\.?S\.?U\.?\b", "PSU"),
@@ -100,7 +110,9 @@ def clean_text(text):
 
 df["text_clean"] = df["text"].apply(clean_text)
 
-# --- Step 3: Group labels into broader political families ---
+# --- Step 3: Map party labels to broader political families ---
+# Note: PCF is put in Gauche (not Extreme gauche) because during 1973-1993
+# the PCF was in the Union de la Gauche and participated in government
 LABEL_TO_FAMILY = {
     "LO": "Extreme gauche",
     "LCR": "Extreme gauche",

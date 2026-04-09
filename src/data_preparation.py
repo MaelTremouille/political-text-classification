@@ -1,3 +1,11 @@
+"""
+Parse raw text files from the Archelec corpus and aggregate multi-page
+documents into a single text per candidate.
+
+Input: text_files/{year}/legislatives/*.txt
+Output: data/corpus_by_document.parquet
+"""
+
 import pandas as pd
 from pathlib import Path
 from collections import defaultdict
@@ -5,7 +13,7 @@ from collections import defaultdict
 YEARS = [1973, 1978, 1981, 1988, 1993]
 OUTPUT_PATH = Path("data/corpus_by_document.parquet")
 
-# Collect all pages grouped by document
+# Group pages by document key (everything except the page number)
 documents = defaultdict(lambda: {"pages": [], "year": "", "dept": "", "constituency": "", "round": ""})
 
 for year in YEARS:
@@ -13,12 +21,14 @@ for year in YEARS:
     if not folder.exists():
         continue
     for txt_file in folder.glob("*.txt"):
+        # Only keep professions de foi, skip ballots (BV) and OCR artifacts
         if "_PF_" not in txt_file.name or "pdfmasterocr" in txt_file.name:
             continue
 
         text = txt_file.read_text(encoding="utf-8")
         parts = txt_file.stem.split("_")
 
+        # doc_key = everything except page number, used to group pages
         doc_key = "_".join(parts[:8])
         page = parts[8]
 

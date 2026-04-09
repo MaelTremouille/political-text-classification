@@ -1,3 +1,15 @@
+"""
+Compute sentence embeddings for the professions de foi corpus and produce
+three visualizations:
+- t-SNE projection colored by political family
+- Cosine similarity heatmap between parties
+- Temporal evolution of political families in embedding space
+
+We use dangvantuan/sentence-camembert-large (a sentence-transformer built
+on CamemBERT-large). We tried CamemBERT base [CLS] embeddings first but
+cosine similarities were all >0.98 (useless), see figures/*_base.png.
+"""
+
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -10,7 +22,7 @@ import seaborn as sns
 OUTPUT_DIR = Path("figures")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# --- Step 1: Extract embeddings with sentence-transformer ---
+# --- Step 1: Extract embeddings ---
 
 df = pd.read_parquet("data/corpus_labeled.parquet")
 
@@ -85,7 +97,8 @@ plt.savefig(OUTPUT_DIR / "cosine_similarity_parties.png", dpi=150)
 plt.close()
 print("Saved cosine_similarity_parties.png")
 
-# --- Step 5: Temporal evolution — mean embeddings per family per year ---
+# --- Step 5: Temporal evolution ---
+# One point per (family, year) pair — only 18 points so t-SNE is limited
 
 years = sorted(df["year"].unique())
 families = sorted(FAMILY_COLORS.keys())
