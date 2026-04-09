@@ -57,15 +57,15 @@ Our approach is as follows. First, we build a labeled dataset by extracting part
 %----------------------------------------------------------------------
 
 \paragraph{Text-based political analysis.}
-The idea of using text to analyze political positions is not new. \citet{laver2003extracting} proposed a method (Wordscores) that uses word frequencies to estimate party policy positions from political texts, by comparing each text to pre-scored reference documents. They applied it to party manifestos in Britain and Ireland. The Manifesto Project~\citep{volkens2013manifesto} took this further by building a large hand-coded database of party platforms across dozens of countries and decades, which is widely used in political science. More recently, \citet{rheault2020word} trained word embedding models augmented with party metadata on parliamentary debates from Britain, Canada, and the United States, showing that these representations can capture ideological differences between parties.
+Using text to analyze political positions has been explored quite a lot. \citet{laver2003extracting} proposed Wordscores, a method that scores words based on reference texts with known political positions, and then uses these scores to place new texts on a left-right scale. They tested it on party manifestos in Britain and Ireland. The Manifesto Project~\citep{volkens2013manifesto} built a large hand-coded database of party platforms across many countries, which is widely used in political science. \citet{rheault2020word} did something different: they trained word embeddings with party metadata on parliamentary debates from Britain, Canada, and the US, and showed that it captures ideological differences.
 
-Our work is close to Laver et al. in that we also use text to infer political positioning, but we frame the problem differently: instead of estimating positions on a continuous scale, we classify documents into discrete political families. We also work with French \textit{professions de foi} rather than English-language manifestos, and compare a classical approach (TF-IDF) with a pretrained transformer model.
+What we do is somewhat related to Laver et al., but instead of placing parties on a continuous scale, we classify documents into discrete families. We also work with French texts rather than English ones, and we compare TF-IDF with a pretrained transformer, which none of the above papers do.
 
 \paragraph{NLP for French political texts.}
-Most of the work cited above focuses on English. Political NLP in French is less developed. The Archelec project~\citep{archelec} has made a large corpus of digitized \textit{professions de foi} publicly available, but the project itself focuses on digitization and OCR rather than on downstream NLP tasks like classification.
+Most of this literature focuses on English. For French, there is not much. The Archelec project~\citep{archelec} made a large corpus of \textit{professions de foi} available, but their work is about digitization and OCR, not about NLP tasks like classification.
 
 \paragraph{CamemBERT.}
-CamemBERT~\citep{martin2020camembert} is a RoBERTa-based model pretrained on a large French web corpus (OSCAR). It has been shown to achieve good results on standard French NLP benchmarks, including named entity recognition, part-of-speech tagging, and text classification. Since our task is text classification in French, it was a natural model to try.
+CamemBERT~\citep{martin2020camembert} is a RoBERTa-based model pretrained on French web data (OSCAR). It works well on standard French NLP benchmarks like NER, POS tagging, and text classification, so it seemed like a good fit for our task.
 
 %----------------------------------------------------------------------
 \section{Data}
@@ -149,19 +149,15 @@ We frame political affiliation prediction as a classification task with four cla
 
 \subsection{Baseline: TF-IDF + logistic regression}
 
-TF-IDF (Term Frequency--Inverse Document Frequency) weighs each term by how frequent it is in a document relative to how common it is across the whole corpus. A word that appears often in one document but rarely elsewhere gets a high weight, while very common words (like ``de'' or ``les'') get a low weight.
+We represent each document as a TF-IDF vector with up to 20{,}000 features, including unigrams and bigrams. We set a minimum document frequency of~3 to filter out OCR artifacts and typos.
 
-We represent each document as a TF-IDF vector with up to 20{,}000 features, including unigrams and bigrams. We set a minimum document frequency of~3, meaning that a term must appear in at least 3~documents to be included; this filters out OCR artifacts, typos, and overly rare words that would add noise without predictive value.
+We train a logistic regression with L2 regularization and balanced class weights, so that minority classes like Extr\^{e}me droite (only 43 training examples) are not ignored.
 
-We train a logistic regression classifier with L2 regularization and balanced class weights. The \texttt{balanced} option automatically adjusts the loss contribution of each class in inverse proportion to its frequency in the training set, which helps the model pay attention to minority classes like Extr\^{e}me droite (only 43 training examples).
-
-This baseline has two main advantages: it is fast to train, and it sees the \emph{entire} document regardless of length, unlike transformer-based models which truncate inputs.
+This baseline is fast to train and sees the \emph{entire} document regardless of length, unlike transformer models which truncate inputs.
 
 \subsection{CamemBERT fine-tuning}
 
-CamemBERT~\citep{martin2020camembert} is a French language model based on the RoBERTa architecture, pretrained on a large French web corpus (OSCAR) using masked language modeling. It learns contextual word representations: the same word gets a different embedding depending on its surrounding context, unlike TF-IDF which treats each word independently.
-
-We fine-tune \texttt{camembert-base} (110M parameters) for sequence classification. The model adds in the beginning of the sequence a special \texttt{[CLS]} token to the input. After passing through 12 layers of self-attention, this token's output vector acts as a fixed-size summary of the entire text. We add a linear classification layer on top of this vector to produce one score per class; the highest score is the predicted label. Input texts are tokenized with the SentencePiece tokenizer and truncated to a maximum of 512 tokens, which is a hard constraint of the model architecture.
+We fine-tune \texttt{camembert-base}~\citep{martin2020camembert} (110M parameters) for sequence classification. CamemBERT is a RoBERTa-based model pretrained on French web data with masked language modeling, so unlike TF-IDF it produces contextual representations. We use the \texttt{[CLS]} token output as a document representation and add a linear layer on top for classification. Inputs are truncated to 512 tokens, which is a hard limit of the architecture.
 
 To handle class imbalance, we use a weighted cross-entropy loss where each
 class receives a weight inversely proportional to its frequency, following
@@ -190,17 +186,17 @@ detailed in Appendix~\ref{app:training}.
   \end{tabular}
 \end{table}
 
-All runs use AdamW (a variant of the Adam algorithm) with a learning rate of $2 \times 10^{-5}$, weight decay of 0.01, and a batch size of 8. Training is performed on an Apple M-series GPU (MPS backend). We did not use external GPU resources since the dataset is small enough for training to run in a reasonable time on a laptop.
+All runs use AdamW with a learning rate of $2 \times 10^{-5}$, weight decay of 0.01, and a batch size of 8. Training was done on an Apple M-series GPU (MPS backend), which was enough given the small dataset size.
 
 \subsection{Semantic mapping}
 
-Beyond classification, we want to visualize how close or far parties are from each other in terms of discourse. The idea is to represent each document as a vector (an embedding), then compare these vectors to measure semantic proximity (and thus discourse proximity).
+Beyond classification, we also want to see how close or far parties are from each other in terms of discourse. The idea is to represent each document as an embedding and then compare them.
 
 We first tried using the \texttt{[CLS]} vector from the pretrained CamemBERT base model (without fine-tuning), but this did not work: all pairwise cosine similarities exceeded 0.98, so every party looked identical (see Appendix~\ref{app:cls_failure}) meaning the model treated all discourses the same. The reason is that CamemBERT base was trained to predict masked words, not to produce embeddings that reflect meaning, and because all \textit{professions de foi} share the same formal register, the \texttt{[CLS]} vectors just converge and give similar values.
 
-We then switched to a sentence-transformer\footnote{\texttt{dangvantuan/sentence-camembert-large}, available at \url{https://huggingface.co/dangvantuan/sentence-camembert-large}}, which is built on CamemBERT-large but fine-tuned for semantic similarity . We use CamemBERT-large rather than base here because this sentence-transformer model is only available in a large version on Hugging Face, and since we do not fine-tune it, the larger size is not a problem. Instead of using the \texttt{[CLS]} token alone, it averages all token embeddings from the last layer (mean pooling) to produce one vector per document. The idea is that two texts about similar topics should end up with similar vectors, and texts about different topics should be far from one another. This gave us much more usable results.
+We then switched to a sentence-transformer\footnote{\texttt{dangvantuan/sentence-camembert-large}, available at \url{https://huggingface.co/dangvantuan/sentence-camembert-large}}, which is built on CamemBERT-large and fine-tuned for semantic similarity. We use the large version because this is the only one available as a sentence-transformer on Hugging Face, and since we do not fine-tune it, the size is not a problem. It uses mean pooling over all token embeddings instead of just the \texttt{[CLS]} token, which gave us much more usable results.
 
-Once we have embeddings for all documents, we compute mean vectors per party and per political family. To compare parties, we use cosine similarity, which measures how aligned two vectors are (1 = same direction, 0 = orthogonal). For visualization, we use t-SNE (t-distributed Stochastic Neighbor Embedding), which projects the high-dimensional vectors onto a 2D plane while trying to preserve local neighborhoods. t-SNE is good for spotting clusters but can distort global distances, so the plots should be read with some attention.
+We then compute mean embeddings per party and per political family, and use cosine similarity to compare them. For visualization, we project everything to 2D with t-SNE. As usual with t-SNE, local neighborhoods are preserved but global distances can be distorted, so the plots should be read with some caution.
 
 %----------------------------------------------------------------------
 \section{Experiments and results}
