@@ -23,10 +23,14 @@ python src/political_mapping.py     # compute embeddings, t-SNE, cosine similari
 
 ## Main results
 
-- **TF-IDF + logistic regression**: 84% accuracy (macro F1: 0.80)
-- **CamemBERT fine-tuned**: 71% accuracy (macro F1: 0.65)
-- TF-IDF outperforms CamemBERT on this corpus — the discriminative signal is mostly lexical
-- Sentence-transformer embeddings show high inter-party similarity (>0.90), with the RPCR as the main outlier
+| Model | Accuracy | Macro F1 | Weighted F1 |
+|-------|----------|----------|-------------|
+| TF-IDF + Logistic Regression | **0.84** | **0.80** | **0.85** |
+| CamemBERT (best run) | 0.71 | 0.65 | 0.72 |
+
+TF-IDF outperforms CamemBERT on every class. We attribute this to the small dataset size (3,163 training examples) and the fact that the signal is mostly in specific keywords rather than context. Extrême gauche is the easiest family to classify (F1 = 0.96), while Droite is the hardest (F1 = 0.60) due to overlap with Gauche vocabulary.
+
+For semantic mapping, sentence-transformer embeddings show that most parties have cosine similarity above 0.90. The RPCR (a regionalist party from New Caledonia) is the main outlier (0.70–0.78).
 
 ## Report
 
