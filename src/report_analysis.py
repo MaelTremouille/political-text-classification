@@ -48,7 +48,7 @@ print()
 # =====================================================================
 
 print("=" * 60)
-print("TOP 15 TF-IDF FEATURES PER CLASS")
+print("TOP 20 TF-IDF FEATURES PER CLASS")
 print("=" * 60)
 
 # Same pipeline as classification.py
@@ -67,7 +67,7 @@ feature_names = np.array(tfidf.get_feature_names_out())
 # For each class, get the top 15 features by coefficient value
 for i, label in enumerate(clf.classes_):
     coefs = clf.coef_[i]
-    top_indices = np.argsort(coefs)[-15:][::-1]
+    top_indices = np.argsort(coefs)[-20:][::-1]
     top_features = feature_names[top_indices]
     top_values = coefs[top_indices]
 

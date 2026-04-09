@@ -19,6 +19,7 @@ python src/data_preparation.py      # parse and aggregate multi-page documents
 python src/label_extraction.py      # extract party labels, clean text, split data
 python src/classification.py        # train TF-IDF baseline + fine-tune CamemBERT
 python src/political_mapping.py     # compute embeddings, t-SNE, cosine similarity
+python src/report_analysis.py       # additional stats for the report (text lengths, top features, confusion matrix)
 ```
 
 ## Main results
@@ -28,7 +29,9 @@ python src/political_mapping.py     # compute embeddings, t-SNE, cosine similari
 | TF-IDF + Logistic Regression | **0.84** | **0.80** | **0.85** |
 | CamemBERT (best run) | 0.71 | 0.65 | 0.72 |
 
-TF-IDF outperforms CamemBERT on every class. We attribute this to the small dataset size (3,163 training examples) and the fact that the signal is mostly in specific keywords rather than context. Extrême gauche is the easiest family to classify (F1 = 0.96), while Droite is the hardest (F1 = 0.60) due to overlap with Gauche vocabulary.
+TF-IDF outperforms CamemBERT on every class. The signal is mostly lexical (specific keywords per political family), so a bag-of-words approach captures it well. Extrême gauche is the easiest to classify (F1 = 0.96) thanks to distinctive vocabulary ("travailleurs", class-struggle language), while Droite is the hardest (F1 = 0.60) due to vocabulary overlap with Gauche — the main confusion is 76 Gauche documents predicted as Droite.
+
+Text length varies a lot across families: Extrême gauche averages ~6,700 words vs ~1,100 for Droite, which also contributes to the TF-IDF signal.
 
 For semantic mapping, sentence-transformer embeddings show that most parties have cosine similarity above 0.90. The RPCR (a regionalist party from New Caledonia) is the main outlier (0.70–0.78).
 
