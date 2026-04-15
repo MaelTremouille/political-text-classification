@@ -1,0 +1,10 @@
+Clustering quality by political family
+============================================================
+
+Representation          Silhouette    Davies-Bouldin
+------------------------------------------------------------
+raw (1024-d)               -0.0222            7.5636
+t-SNE 2D                   -0.0963            5.6829
+UMAP 2D                    -0.1641            5.7368
+
+Silhouette closer to 1 = tight clusters; Davies-Bouldin lower = better separated.
