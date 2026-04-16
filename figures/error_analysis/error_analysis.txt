@@ -1,0 +1,112 @@
+============================================================
+Error analysis (TF-IDF v2 vs frozen sentence-CamemBERT)
+============================================================
+
+--- By election year ---
+TF-IDF v2:
+        n    acc
+year            
+1973  140  0.900
+1978  123  0.927
+1981  119  0.908
+1988  143  0.713
+1993  153  0.791
+
+sentence-CamemBERT:
+        n    acc
+year            
+1973  140  0.671
+1978  123  0.780
+1981  119  0.731
+1988  143  0.664
+1993  153  0.529
+
+
+--- By political family ---
+TF-IDF v2:
+                  n    acc
+party_family              
+Droite           87  0.770
+Extreme droite    9  0.889
+Extreme gauche  175  0.977
+Gauche          407  0.799
+
+sentence-CamemBERT:
+                  n    acc
+party_family              
+Droite           87  0.437
+Extreme droite    9  0.222
+Extreme gauche  175  0.697
+Gauche          407  0.715
+
+
+--- By document length (tokens) ---
+TF-IDF v2:
+              n    acc
+len_bucket            
+0-500        25  0.560
+500-1500    260  0.681
+1500-3000   108  0.954
+3000+       285  0.972
+
+sentence-CamemBERT:
+              n    acc
+len_bucket            
+0-500        25  0.360
+500-1500    260  0.642
+1500-3000   108  0.741
+3000+       285  0.691
+
+
+--- By OCR quality proxy (non-alpha ratio) ---
+TF-IDF v2:
+              n    acc
+ocr_bucket            
+<10%        678  0.842
+10-20%        0    NaN
+20-30%        0    NaN
+30%+          0    NaN
+
+sentence-CamemBERT:
+              n    acc
+ocr_bucket            
+<10%        678  0.668
+10-20%        0    NaN
+20-30%        0    NaN
+30%+          0    NaN
+
+
+Disagreements (TF-IDF ≠ CamemBERT): 228 / 678 (33.6%)
+Both models wrong: 61 / 678 (9.0%)
+
+--- 15 disagreement examples (doc, true, tfidf, scam) ---
+[EL067_L_1973_03_059_06_1_PF]  true=Gauche            tfidf=Gauche            scam=Extreme gauche  
+    '6e circonscription du Nord Elections législatives de Mars 1973 Electrices, Electeurs, Dimanche 4 Mars, vous allez pouvoir opérer un choix décisif entre deux politiques. · La poursuite de la politique '
+[EL194_L_1993_03_068_04_1_PF]  true=Gauche            tfidf=Droite            scam=Gauche          
+    'Sciences Po / fonds CEVIPOF ELECTIONS LEGISLATIVES - 21 MARS1993 - 4° CIRCONSCRIPTION DU HAUT RHIN  ALSACE Seul Candidat de DROITE face aux res- ponsables du déclin, de l'immigration sau- vage, de la '
+[EL194_L_1993_03_068_01_1_PF]  true=Gauche            tfidf=Droite            scam=Extreme droite  
+    'Sciences Po / fonds CEVIPOF Elections législatives 21 - 28 Mars 1993 Né dans la vallée de Masevaux 42 ans, marié, 2 enfants Avocat à la Cour d'Appel de Colmar Conseiller municipal de Colmar depuis 198'
+[EL174_L_1988_06_024_03_2_PF]  true=Droite            tfidf=Droite            scam=Gauche          
+    'RÉPUBLIQUE FRANÇAISE DÉPARTEMENT DE LA DORDOGNE TROISIÈME CIRCONSCRIPTION ÉLECTION LÉGISLATIVE DU 12 JUIN 1988  Pierre-Claude Laviale et Jacques Détivaud PIERRE-CLAUDE LAVIALE Avocat à la Cour, Présid'
+[EL176_L_1988_06_063_01_2_PF]  true=Gauche            tfidf=Droite            scam=Gauche          
+    'DÉPARTEMENT DU PUY-DE-DÔME -RÉPUBLIQUE FRANÇAISE ÉLECTIONS LÉGISLATIVES DU 12 JUIN 1988 1re Circonscription (Clermont-Ferrand Nord) MAURICE POURCHON Conseiller Municipal de Clermont-Ferrand Conseiller'
+[EL175_L_1988_06_038_03_2_PF]  true=Gauche            tfidf=Droite            scam=Gauche          
+    'Sciences Po / fonds CEVIPOF ELECTIONS LÉGISLATIVES DU 12 JUIN 1988 3e circonscription de l'Isère Michel DESTOT candidat Conseiller Général de Grenoble Jacqueline BALLUET suppléante Adjointe au Maire d'
+[EL177_L_1988_06_092_05_2_PF]  true=Droite            tfidf=Droite            scam=Gauche          
+    'ELECTIONS LEGISLATIVES DU 12 JUIN 1988 - CLICHY-LEVALLOIS (HAUTS-DE-SEINE) Patrick BALKANY Maire de Levallois Vice-Président du Conseil Général des Hauts-de-seine Sciences Po / fonds CEVIPOFSciences P'
+[EL174_L_1988_06_024_04_1_PF]  true=Gauche            tfidf=Gauche            scam=Droite          
+    'DEPARTEMENT DE LA DORDOGNE REPUBLIQUE FRANÇAISE ELECTIONS LEGISLATIVES des 5 et 12 juin 1988 La France Unie Candidats de la  Roland DUMAS Paul DUVALEIX Chers compatriotes, Paul DUVALEIX et moi sollici'
+[EL068_L_1973_03_069_11_2_PF]  true=Gauche            tfidf=Gauche            scam=Extreme gauche  
+    'Sciences Po / fonds CEVIPOF 11e Circonscription du Rhône ELECTIONS LEGISLATIVES MARS 1973 Marcel HOUËL DEPUTE SORTANT MAIRE DE VENISSIEUX suppléant : Georges FRAISON Madame, Monsieur, Je remercie les '
+[EL135_L_1981_06_056_05_2_PF]  true=Gauche            tfidf=Droite            scam=Gauche          
+    'ÉLECTIONS LÉGISLATIVES DE JUIN 1981 5e Circonscription du Morbihan Jean-Yves LE DRIAN JO LE LAMER Suppléant Sciences Po / fonds CEVIPOF  pour la Majorité de la France29VY-NISSL MAIS Madame, Mademoisel'
+[EL177_L_1988_06_094_11_1_PF]  true=Gauche            tfidf=Gauche            scam=Extreme gauche  
+    'Sciences Po / fonds CEVIPOF ÉLECTIONS LÉGISLATIVES DU 5 JUIN 1988 11e CIRCONSCRIPTION DU VAL-DE-MARNE « L'Écologie » 199, rue des Moulins, 94120 FONTENAY Daniel MONAURY Agent RATP Suppléante Suzanne C'
+[EL104_L_1978_03_060_01_1_PF]  true=Extreme gauche    tfidf=Extreme gauche    scam=Gauche          
+    'Sciences Po / fonds CEVIPOF ELECTIONS LÉGISLATIVES SCRUTIN DU 12 MARS 1978 CIRCONSCRIPTION DE BEAUVAIS-NORD Walter AMSALLEM Pharmacien - 46 ans Maire de Beauvais Conseiller Général Secrétaire du Conse'
+[EL195_L_1993_03_075_05_1_PF]  true=Extreme gauche    tfidf=Extreme gauche    scam=Gauche          
+    'République Française - 5 circonscription de Paris Elections législatives - 21 et 28 Mars 1993 Sciences Po / fonds CEVIPOF Michel ROUSSEL Titulaire Catherine SALMOCHI Suppléante Madame, Mademoiselle, M'
+[EL191_L_1993_03_033_02_2_PF]  true=Droite            tfidf=Extreme droite    scam=Droite          
+    'Sciences Po / fonds CEVIPOF ÉLECTIONS LÉGISLATIVES DU 28 MARS 1993 2e circonscription de la Gironde  Chers amis, Rassemblons-nous et, le 28 mars, déci- dons de notre avenir. Grâce aux milliers de Bord'
+[EL191_L_1993_03_038_07_2_PF]  true=Droite            tfidf=Extreme droite    scam=Gauche          
+    'Georges COLOMBIER Député de l'Isère Vice-Président du Conseil Général Maire de Meyrieu-les-Etangs Suppléant : Jean-Pierre GIRARD Conseiller Municipal de Bourgoin-Jallieu Candidats de l' - - Sciences P'
