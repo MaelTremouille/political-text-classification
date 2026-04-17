@@ -49,17 +49,15 @@ python src/error_analysis.py
 | CamemBERT fine-tuned (run 2) | 0.710 | 0.650 | – | – |
 | sentence-CamemBERT frozen + LR | 0.668 | 0.509 | 0.651 ± 0.010 | 0.422 |
 
-**Summary of findings (full narrative in the report):**
+A few takeaways (the full story is in the report). The baseline TF-IDF gets 84% test accuracy, but when you look at its top features they are mostly dates, toponyms and politicians' surnames rather than political vocabulary. A second, more aggressive cleaning pass (`text_clean_v2`) masks those categories; accuracy barely moves, but for Extrême gauche the top features become recognisably political (`travailleurs`, `patrons`, `bourgeoisie`, `révolutionnaires`, `payer`). The Droite and Extrême droite classes still leak a second layer of signal we had not anticipated: local candidates' surnames and minor city names.
 
-- The baseline TF-IDF's 84% accuracy is partly built on dates, toponyms, and politician surnames, not on political vocabulary. A second cleaning pass (`text_clean_v2`) masks these categories and keeps accuracy essentially unchanged, but the top-20 features for Extrême gauche become unambiguously political (`travailleurs`, `patrons`, `bourgeoisie`, `révolutionnaires`, `payer`).
-- Residual leakage on the Droite and Extrême droite classes shifts from first-order (major dates/cities) to second-order (local candidates' surnames and minor cities). This is discussed both as a limitation and as a real feature of French legislative elections, which are candidate-centric.
-- A frozen sentence-CamemBERT encoder with a linear head (~4,100 trainable parameters) reaches only 67% test accuracy vs TF-IDF's 84%. Fine-tuning end-to-end (110M parameters on 3,163 training examples) reaches 71% but overfits. On this corpus, sparse lexical features beat contextual embeddings.
-- Temporal splits (train on earlier years, test on later ones) drop TF-IDF from 84% to 72% and the frozen head from 67% to 42%. Sentence embeddings are hit harder because topical content shifts more across eras than isolated ideological markers do.
-- Semantic mapping via sentence-CamemBERT, t-SNE, and UMAP shows overlapping political families in the embedding space (silhouette ≈ −0.02 on raw 1024-d embeddings, −0.10 on t-SNE, −0.16 on UMAP); Extrême gauche is the only reasonably tight cluster.
+A frozen sentence-CamemBERT encoder with a small linear head (~4,100 trainable parameters) reaches only 67% test accuracy vs TF-IDF's 84%. Fine-tuning CamemBERT end-to-end (110M parameters on 3,163 training docs) reaches 71% and overfits after two epochs. On this corpus, sparse lexical features beat contextual embeddings.
+
+Temporal splits drop TF-IDF from 84% to 72% and the frozen head from 67% to 42%, which is probably a more honest number if you wanted to apply the classifier to a new election. Semantic mapping via t-SNE and UMAP on the sentence-CamemBERT embeddings shows heavily overlapping political families (silhouette ≈ −0.02 on the raw 1024-d embeddings), with Extrême gauche being the only reasonably tight cluster.
 
 ## Report
 
-The report (`report/main.tex`, NeurIPS format) compiles to `report/main.pdf`. Figures are shared between `figures/` (generated) and `report/figures/` (used at compile time).
+The report (`report/main.tex`, NeurIPS format) compiles to `report/main.pdf`. The LaTeX `graphicspath` points at `../figures/`, so the project-level `figures/` folder is the single source of truth.
 
 ```bash
 cd report && pdflatex main.tex && pdflatex main.tex
