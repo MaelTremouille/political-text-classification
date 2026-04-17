@@ -1,15 +1,15 @@
 """
-Build an aggressively cleaned text column `text_clean_v2` alongside the
-existing `text_clean`. The goal is to strip the lexical leakage that
-dominates the TF-IDF top features in the baseline (stopwords, election
-dates, French place names, politicians' surnames, coalition banners,
-Alsatian bilingual fragments).
+Build a more aggressively cleaned text column `text_clean_v2` on top of the
+existing `text_clean`. The baseline TF-IDF top features were full of things
+that are not really political discourse (stopwords, dates, French place
+names, politicians' surnames, a few German / Alsatian fragments), so we
+strip them here.
 
-The transformer pipeline keeps using `text_clean` because attention models
-need the natural syntactic structure.
+We keep `text_clean` untouched because the transformer models need the
+original sentence structure (stopwords included).
 
 Input:  data/corpus_labeled.parquet, data/{train,val,test}.parquet
-Output: same files, with an added `text_clean_v2` column.
+Output: the same files, with `text_clean_v2` added as an extra column.
 """
 
 import re

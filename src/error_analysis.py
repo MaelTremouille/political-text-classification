@@ -1,8 +1,8 @@
 """
-Error analysis across TF-IDF v2 and frozen sentence-CamemBERT:
-- Accuracy by document length bucket, by year, by family.
-- OCR-quality proxy (non-alphabetic ratio) vs accuracy.
-- Documents where the two models disagree (useful qualitative examples).
+Quick error analysis: where do TF-IDF v2 and the frozen sentence-CamemBERT
+head succeed / fail? We slice accuracy by document length, by election year
+and by political family, and we print a few documents where the two models
+disagree so we can look at them by hand.
 
 Usage:
     python src/error_analysis.py
@@ -20,16 +20,13 @@ FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def add_doc_features(preds_df, corpus):
-    """Attach text length and OCR quality proxy from the corpus."""
+    """Attach the cleaned text and the document length (in tokens)."""
     meta = corpus.set_index("doc_name")[["text_clean", "year", "party_family"]]
     preds_df = preds_df.merge(
         meta.rename(columns={"text_clean": "_text"}),
         left_on="doc_name", right_index=True, how="left", suffixes=("", "_meta"),
     )
     preds_df["n_tokens"] = preds_df["_text"].str.split().str.len()
-    preds_df["non_alpha_ratio"] = preds_df["_text"].apply(
-        lambda s: sum(not c.isalpha() and not c.isspace() for c in s) / max(1, len(s))
-    )
     return preds_df
 
 
@@ -72,12 +69,6 @@ def main():
     tfidf["len_bucket"] = bucketise(tfidf["n_tokens"], edges, labels)
     scam["len_bucket"] = bucketise(scam["n_tokens"], edges, labels)
 
-    # OCR buckets
-    ocr_edges = [0, 0.1, 0.2, 0.3, 1.0]
-    ocr_labels = ["<10%", "10-20%", "20-30%", "30%+"]
-    tfidf["ocr_bucket"] = bucketise(tfidf["non_alpha_ratio"], ocr_edges, ocr_labels)
-    scam["ocr_bucket"] = bucketise(scam["non_alpha_ratio"], ocr_edges, ocr_labels)
-
     # Tables
     report = []
     report.append("=" * 60)
@@ -87,7 +78,6 @@ def main():
         ("year", "By election year"),
         ("party_family", "By political family"),
         ("len_bucket", "By document length (tokens)"),
-        ("ocr_bucket", "By OCR quality proxy (non-alpha ratio)"),
     ]:
         report.append(f"--- {title} ---")
         report.append("TF-IDF v2:")
@@ -125,13 +115,12 @@ def main():
     out.write_text("\n".join(report) + "\n")
     print(f"Wrote {out}")
 
-    # Figures
+    # Figures (we dropped the OCR-quality plot: the non-alpha ratio proxy
+    # was not discriminative on our corpus, almost everything sat below 10%)
     plot_acc_by(tfidf, scam, "year", FIG_DIR / "acc_by_year.png",
                 "Accuracy per election year")
     plot_acc_by(tfidf, scam, "len_bucket", FIG_DIR / "acc_by_length.png",
                 "Accuracy per document length bucket")
-    plot_acc_by(tfidf, scam, "ocr_bucket", FIG_DIR / "acc_by_ocr.png",
-                "Accuracy vs OCR quality (non-alpha ratio)")
 
     print(f"Figures saved to {FIG_DIR}/")
 

@@ -1,13 +1,15 @@
 """
-Complement to political_mapping.py:
-- UMAP projection of document embeddings (second view alongside t-SNE).
-- Clustering quality metrics (silhouette, Davies-Bouldin) on raw embeddings
-  and both 2D projections, partitioned by political family.
-- Per-party temporal trajectories in the embedding space (bonus).
+Extra views on the sentence-transformer embeddings that political_mapping.py
+already computed:
+- a UMAP projection alongside the existing t-SNE, to cross-check the layout;
+- silhouette and Davies-Bouldin on the political-family partition (raw
+  1024-d embeddings + the two 2D projections), to put numbers on the
+  cluster overlap the scatter plots suggest;
+- per-party trajectories in UMAP space, 1973-1993.
 
-Input:  data/corpus_labeled.parquet, data/document_embeddings.npy
-Output: figures/umap_by_family.png, figures/party_trajectories.png,
-        figures/clustering_metrics.txt
+Reads data/corpus_labeled.parquet and data/document_embeddings.npy.
+Writes figures/umap_by_family.png, figures/party_trajectories.png,
+figures/clustering_metrics.txt.
 """
 
 from pathlib import Path

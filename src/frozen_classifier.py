@@ -1,17 +1,18 @@
 """
-Frozen sentence-CamemBERT encoder + linear head classifier.
+Data-efficient alternative to fine-tuning CamemBERT: we freeze a
+sentence-CamemBERT encoder and only fit a logistic regression on top of its
+pooled outputs. Since 3,163 training docs for 110M parameters is a bad
+ratio, a small linear head (~4k trainable params) is a more reasonable fit
+and gives a fairer representation-vs-representation comparison with
+TF-IDF + LogReg.
 
-Motivation: fine-tuning CamemBERT (110M params) on 3,163 training examples
-overfits. A frozen encoder + linear head has ~4k trainable parameters, which
-is a proper fit for the data regime. Comparing it to TF-IDF + LogReg is
-now an equal-capacity comparison of representations.
+We reuse the embeddings already computed by political_mapping.py
+(data/document_embeddings.npy). Rows there match rows in
+corpus_labeled.parquet, so we just align split_df rows back to embedding
+rows via doc_name.
 
-Uses pre-computed embeddings from data/document_embeddings.npy (produced by
-political_mapping.py using dangvantuan/sentence-camembert-large). Alignment
-with the parquets is by row order in corpus_labeled.parquet.
-
-Protocols: held-out test (with bootstrap CI), 5-fold CV on train+val,
-temporal splits. Mirrors src/evaluation.py so numbers are directly comparable.
+Evaluation protocols mirror src/evaluation.py (held-out test with bootstrap
+CI, 5-fold CV, temporal splits) so numbers line up.
 
 Usage:
     python src/frozen_classifier.py \

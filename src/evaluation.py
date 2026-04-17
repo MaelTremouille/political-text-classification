@@ -1,12 +1,13 @@
 """
-TF-IDF + LogReg evaluation with three protocols:
-1. Held-out test (as in the baseline) — gives a direct before/after comparison.
-2. Stratified 5-fold CV on train+val, bootstrap CI on test — gives uncertainty.
-3. Temporal split — train on early elections, test on later, and vice-versa.
+Re-run the TF-IDF + logistic regression pipeline with a bit more rigour than
+the baseline classification.py script:
+- held-out test with a bootstrap CI on macro-F1,
+- stratified 5-fold CV on train+val,
+- a few temporal splits (train on early years, test on later, and back).
 
-Outputs numeric results and the top-20 features per class (coef * mean idf).
-Takes a --text_col argument so we can run the same protocol on text_clean
-(baseline) and text_clean_v2 (cleaned).
+Also dumps the top-20 features per class and the test predictions so the
+error-analysis script can pick them up. We take --text_col as an argument
+so we can re-run on text_clean (baseline) or text_clean_v2 (cleaned).
 
 Usage:
     python src/evaluation.py --text_col text_clean_v2 --out data/results_tfidf_v2.txt

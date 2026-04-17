@@ -1,2 +1,20 @@
 arkindex-export==0.2.1
 tqdm==4.67.3
+
+# Data / plotting
+pandas
+numpy
+pyarrow
+matplotlib
+seaborn
+
+# Classical ML
+scikit-learn
+
+# Transformers + sentence embeddings (CamemBERT, sentence-camembert-large)
+torch
+transformers
+sentence-transformers
+
+# Mapping
+umap-learn
