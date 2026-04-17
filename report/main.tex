@@ -14,6 +14,7 @@
 \usepackage{xcolor}
 \usepackage{graphicx}
 \usepackage{subcaption}
+\usepackage{multirow}
 
 \graphicspath{{figures/}}
 
@@ -33,9 +34,9 @@
 \begin{abstract}
 In this project, we try to predict the political affiliation of candidates from their \textit{professions de foi} (campaign manifestos) in French legislative elections between 1973 and 1993.
 We use 4{,}519 documents from the Archelec corpus, extract party labels with regex, and classify them into four political families.
-We compare a TF-IDF logistic regression with a fine-tuned CamemBERT model.
-TF-IDF gets 84\% accuracy while CamemBERT only reaches 71\%, which seems to show that simple word-level features are enough for this corpus.
-We also compute sentence-transformer embeddings to visualize how close parties are to each other using t-SNE and cosine similarity.
+A first run with TF-IDF + logistic regression gets 84\% test accuracy and a fine-tuned CamemBERT reaches 71\%, but a close look at the top TF-IDF features shows that the model is relying a lot on stopwords, election dates, place names and politicians' surnames rather than on political vocabulary. We run a second cleaning pass that masks these categories and re-evaluate with cross-validation, bootstrap confidence intervals, and temporal splits. Test accuracy stays at 84\% on the i.i.d.\ split but drops to 72\% when we train on 1973--1981 and test on 1988--1993, which indicates that a non-negligible part of the signal is regional or cohort-specific rather than ideological.
+We also try a data-efficient alternative to full fine-tuning: sentence-CamemBERT used as a frozen encoder with a linear head on top. It only reaches 67\% test accuracy, below TF-IDF, which suggests that on this corpus the lexical signal is hard to beat with contextual embeddings.
+Finally, we visualise inter-party distances using sentence-transformer embeddings with both t-SNE and UMAP, and we quantify cluster separation with silhouette and Davies--Bouldin scores. The result confirms what the classifier already suggested: political families overlap heavily in the embedding space, except for Extr\^{e}me gauche which sits in a relatively tight cluster.
 \end{abstract}
 
 %----------------------------------------------------------------------
@@ -49,7 +50,7 @@ We ask the following question: \textbf{can we predict a candidate's political af
 
 We use the Archelec corpus~\citep{archelec}, which contains digitized and OCR'd \textit{professions de foi} from French legislative elections held in 1973, 1978, 1981, 1988, and 1993. The OCR'd text files were obtained directly from the course repository\footnote{\url{https://gitlab.teklia.com/ckermorvant/arkindex\_archelec}}, so we did not have to perform any OCR processing. This twenty-year period covers significant changes in the French political landscape, from left-wing coalitions in the 1970s to alternations of power in the 1980s and 1990s.
 
-Our approach is as follows. First, we build a labeled dataset by extracting party mentions from the text using regular expressions, then removing these mentions to prevent data leakage (Section~\ref{sec:data}) (\textit{i.e.} we did not want the model to cheat by learning to detect the name of the party in the text). Second, we compare a TF-IDF logistic regression baseline with a fine-tuned CamemBERT model~\citep{martin2020camembert} (Section~\ref{sec:models}). Third, we analyze inter-party distances through sentence-transformer embeddings (Section~\ref{sec:results}) to allow a visualization in a political 2D mapping. Implementation details are provided in Appendix~\ref{app:implementation}.
+Our approach is as follows. First, we build a labeled dataset by extracting party mentions from the text using regular expressions, then removing these mentions to prevent data leakage (Section~\ref{sec:data}). Second, we compare a TF-IDF logistic regression baseline with a fine-tuned CamemBERT model~\citep{martin2020camembert} (Section~\ref{sec:models}). The initial TF-IDF baseline reaches 84\% test accuracy, but when we inspect its top features we find that the model is partly classifying on stopwords, election dates, place names, and politicians' surnames, not on political discourse. We therefore add a second preprocessing pipeline that masks these categories, re-evaluate under cross-validation and temporal splits, and introduce a third data-efficient model (frozen sentence-CamemBERT with a linear head) to test whether contextual representations can recover the signal we have just stripped from the TF-IDF inputs. Third, we analyse inter-party distances through sentence-transformer embeddings with t-SNE and UMAP, and add quantitative clustering metrics (Section~\ref{sec:results}). Implementation details are provided in Appendix~\ref{app:implementation}.
 
 %----------------------------------------------------------------------
 \section{Related work}
@@ -57,15 +58,15 @@ Our approach is as follows. First, we build a labeled dataset by extracting part
 %----------------------------------------------------------------------
 
 \paragraph{Text-based political analysis.}
-Using text to analyze political positions has been explored quite a lot. \citet{laver2003extracting} proposed Wordscores, a method that scores words based on reference texts with known political positions, and then uses these scores to place new texts on a left-right scale. They tested it on party manifestos in Britain and Ireland. The Manifesto Project~\citep{volkens2013manifesto} built a large hand-coded database of party platforms across many countries, which is widely used in political science. \citet{rheault2020word} did something different: they trained word embeddings with party metadata on parliamentary debates from Britain, Canada, and the US, and showed that it captures ideological differences.
+Using text to analyse political positions has been explored in several directions. \citet{laver2003extracting} proposed Wordscores, a method that scores words from reference texts with known political positions and then uses those scores to place new texts on a left--right scale; they tested it on British and Irish party manifestos. \citet{slapin2008scaling} followed up with Wordfish, which scales parties on a single ideological dimension from word frequencies alone, without reference texts. On the empirical-political-science side, the Manifesto Project~\citep{volkens2013manifesto} built a large hand-coded database of party platforms across many countries, which is still widely used. More recently, \citet{rheault2020word} trained word embeddings with party metadata on parliamentary debates from Britain, Canada and the US and showed that it captures ideological differences better than older bag-of-words baselines.
 
-What we do is somewhat related to Laver et al., but instead of placing parties on a continuous scale, we classify documents into discrete families. We also work with French texts rather than English ones, and we compare TF-IDF with a pretrained transformer, which none of the above papers do.
+What we do is somewhat related to Laver et al.\ and Slapin--Proksch, but instead of placing parties on a continuous scale we classify documents into four discrete families. We also work with French texts rather than English ones and we compare a TF-IDF baseline with a fine-tuned transformer and a frozen-encoder variant, which none of the above papers do.
 
 \paragraph{NLP for French political texts.}
-Most of this literature focuses on English. For French, there is not much. The Archelec project~\citep{archelec} made a large corpus of \textit{professions de foi} available, but their work is about digitization and OCR, not about NLP tasks like classification.
+Most of this literature is focused on English. For French, there is less. The Archelec project~\citep{archelec} made a large corpus of \textit{professions de foi} available, but their own work is about digitisation and OCR, not classification. The MARPOR/CMP data~\citep{volkens2013manifesto} does include some French party programmes, but not at the candidate level.
 
-\paragraph{CamemBERT.}
-CamemBERT~\citep{martin2020camembert} is a RoBERTa-based model pretrained on French web data (OSCAR). It works well on standard French NLP benchmarks like NER, POS tagging, and text classification, so it seemed like a good fit for our task.
+\paragraph{CamemBERT and sentence-transformers.}
+CamemBERT~\citep{martin2020camembert} is a RoBERTa-based model pretrained on French web data (OSCAR), which works well on standard French NLP benchmarks like NER, POS tagging, and text classification, which is why we picked it for our task. For the semantic mapping, we use a sentence-transformer~\citep{reimers2019sentence}: a BERT-style encoder that has been further trained so that cosine similarity between its pooled outputs reflects sentence-level semantic similarity. The variant we use (\texttt{dangvantuan/sentence-camembert-large}) is a French instance of that family, built on CamemBERT-large.
 
 %----------------------------------------------------------------------
 \section{Data}
@@ -93,7 +94,11 @@ This procedure labels 97.8\% of documents (4{,}557 out of 4{,}658). We identify 
 We do not take into account the \'{E}cologistes class (38 documents), which is too small for meaningful classification (we could not classify them well without decreasing the overall results too much). The final dataset contains \textbf{4{,}519 documents} over four political families.
 
 \paragraph{Data leakage prevention.}
-Since we aim to classify political affiliation from discourse content rather than explicit party names, we remove all party mentions from the text using the same regex patterns. This produces a cleaned text column used for all the models.
+Since we aim to classify political affiliation from discourse content rather than explicit party names, we remove all party mentions from the text using the same regex patterns. This produces a first cleaned column, which we call \texttt{text\_clean}, used in the baseline.
+
+\paragraph{A second cleaning pass.}
+\label{sec:textcleanv2}
+Running the baseline exposed a gap between what we wanted to measure (political discourse) and what the model actually uses. The top TF-IDF coefficients include a lot of stopwords, election dates (\textit{``12 juin''}, \textit{``mars 1988''}, \textit{``1981''}), French toponyms (\textit{``guadeloupe''}, \textit{``corse''}, \textit{``metz''}, \textit{``nice''}), politicians' surnames that the original cleaning did not remove (\textit{``le pen''}, \textit{``cercle national''}), ideological label words (\textit{``communiste''}) and a few German tokens (\textit{``die''}, \textit{``und''}) that probably come from bilingual manifestos in Alsace or Moselle. Most of these have little to do with the political content we wanted to classify. We therefore build a second cleaned column, \texttt{text\_clean\_v2}, by successively masking (i) a list of common French stopwords (extended with the German tokens just mentioned); (ii) dates via regex on \{day + month\}, \{month + year\}, and standalone 19XX years; (iii) a hardcoded list of around 220 French toponyms, covering the metropolitan and overseas departments, the historical regions, and the largest cities; (iv) an extended list of politicians' surnames (Mitterrand, Chirac, Le~Pen, etc.) and coalition banners (\textit{Cercle National}, \textit{Majorité Présidentielle}, etc.). We evaluate TF-IDF on \texttt{text\_clean\_v2}, but the transformer models still use \texttt{text\_clean} because attention models rely on the full sentence structure (removing stopwords would hurt them).
 
 \subsection{Dataset statistics}
 
@@ -138,14 +143,14 @@ We also looked at text length and found pretty big differences between families 
   \end{tabular}
 \end{table}
 
-We split the data into train (70\%, 3{,}163 documents), validation (15\%, 678), and test (15\%, 678) using stratified sampling on the political family label.
+We split the data into train (70\%, 3{,}163 documents), validation (15\%, 678), and test (15\%, 678) using stratified sampling on the political family label. We keep the same split (seed 42) across all the experiments so that numbers remain directly comparable between models and cleaning variants. For the temporal robustness tests, we pool all 4{,}519 documents and re-split by election year.
 
 %----------------------------------------------------------------------
 \section{Models}
 \label{sec:models}
 %----------------------------------------------------------------------
 
-We frame political affiliation prediction as a classification task with four classes. We train two models of different complexities.
+We frame political affiliation prediction as a classification task with four classes. We train three models: a TF-IDF logistic regression baseline, an end-to-end fine-tuned CamemBERT, and a data-efficient variant that uses sentence-CamemBERT as a frozen encoder with a linear head.
 
 \subsection{Baseline: TF-IDF + logistic regression}
 
@@ -155,7 +160,7 @@ We train a logistic regression with L2 regularization and balanced class weights
 
 This baseline is fast to train and sees the \emph{entire} document regardless of length, unlike transformer models which truncate inputs.
 
-\subsection{CamemBERT fine-tuning}
+\subsection{CamemBERT fine-tuning (end-to-end)}
 
 We fine-tune \texttt{camembert-base}~\citep{martin2020camembert} (110M parameters) for sequence classification. CamemBERT is a RoBERTa-based model pretrained on French web data with masked language modeling, so unlike TF-IDF it produces contextual representations. We use the \texttt{[CLS]} token output as a document representation and add a linear layer on top for classification. Inputs are truncated to 512 tokens, which is a hard limit of the architecture.
 
@@ -188,13 +193,20 @@ detailed in Appendix~\ref{app:training}.
 
 All runs use AdamW with a learning rate of $2 \times 10^{-5}$, weight decay of 0.01, and a batch size of 8. Training was done on an Apple M-series GPU (MPS backend), which was enough given the small dataset size.
 
+\subsection{Frozen sentence-CamemBERT with a linear head}
+\label{sec:frozen}
+
+Fine-tuning a 110M-parameter transformer on 3{,}163 training examples overfits (we show this in Section~\ref{sec:results}). To stay in the same transformer family while matching the small-data regime, we add a third model: a \emph{frozen} sentence-CamemBERT encoder with a small linear head.
+
+We reuse the \texttt{dangvantuan/sentence-camembert-large} model that we already use for the semantic mapping. It outputs a 1{,}024-dimensional vector per document (mean-pooled over token hidden states of a CamemBERT-large encoder that was further trained on a French sentence-similarity dataset\footnote{See the model card at \url{https://huggingface.co/dangvantuan/sentence-camembert-large}.}). We do not update any of its parameters on our corpus. On top of these frozen vectors we fit a logistic regression with balanced class weights, the same classifier as the TF-IDF baseline. This drops the number of trainable parameters from $\sim$110M to about 4{,}100 (1024~$\times$~4 classes plus biases), which turns the comparison against TF-IDF + LR into a comparison of \emph{representations}: both feed a linear head of similar capacity, one with 20{,}000 sparse lexical features, the other with 1{,}024 dense contextual features.
+
 \subsection{Semantic mapping}
 
 Beyond classification, we also want to see how close or far parties are from each other in terms of discourse. The idea is to represent each document as an embedding and then compare them.
 
 We first tried using the \texttt{[CLS]} vector from the pretrained CamemBERT base model (without fine-tuning), but this did not work: all pairwise cosine similarities exceeded 0.98, so every party looked identical (see Appendix~\ref{app:cls_failure}) meaning the model treated all discourses the same. The reason is that CamemBERT base was trained to predict masked words, not to produce embeddings that reflect meaning, and because all \textit{professions de foi} share the same formal register, the \texttt{[CLS]} vectors just converge and give similar values.
 
-We then switched to a sentence-transformer\footnote{\texttt{dangvantuan/sentence-camembert-large}, available at \url{https://huggingface.co/dangvantuan/sentence-camembert-large}}, which is built on CamemBERT-large and fine-tuned for semantic similarity. We use the large version because this is the only one available as a sentence-transformer on Hugging Face, and since we do not fine-tune it, the size is not a problem. It uses mean pooling over all token embeddings instead of just the \texttt{[CLS]} token, which gave us much more usable results.
+We then switched to a sentence-transformer\footnote{\texttt{dangvantuan/sentence-camembert-large}, available at \url{https://huggingface.co/dangvantuan/sentence-camembert-large}.}, which is built on CamemBERT-large and further trained for sentence-level semantic similarity. We picked the large variant because we do not fine-tune it (size is not a problem at inference time) and it was the most widely used French sentence-transformer at the time of the project. It uses mean pooling over all token embeddings instead of just the \texttt{[CLS]} token, and the resulting vectors gave us much more usable pairwise distances.
 
 We then compute mean embeddings per party and per political family, and use cosine similarity to compare them. For visualization, we project everything to 2D with t-SNE. As usual with t-SNE, local neighborhoods are preserved but global distances can be distorted, so the plots should be read with some caution.
 
@@ -205,42 +217,53 @@ We then compute mean embeddings per party and per political family, and use cosi
 
 \subsection{Classification performance}
 
-Table~\ref{tab:results} reports test set results for both models.
+Table~\ref{tab:results} compares all four model--preprocessing pairs on the held-out test split, with bootstrap confidence intervals on macro-F1 (1{,}000 resamples) and mean $\pm$ standard deviation over a 5-fold stratified CV on train+val. CamemBERT fine-tuning numbers come from the single run 2 (five epochs with scheduler) since we did not re-train it for each fold.
 
 \begin{table}[h]
-  \caption{Test set performance. TF-IDF outperforms CamemBERT across all metrics.}
+  \caption{Test set performance across all models. Columns 2--3: held-out test (stratified 70/15/15). Column 4: macro-F1 95\% bootstrap CI on the same test set (1{,}000 resamples). Columns 5--6: 5-fold CV (mean~$\pm$~s.d.) on train+val.}
   \label{tab:results}
   \centering
-  \begin{tabular}{lccc}
+  \small
+  \begin{tabular}{lccccc}
     \toprule
-    Model & Accuracy & Macro F1 & Weighted F1 \\
+    Model & Test Acc & Macro F1 & 95\% CI Macro F1 & CV Acc & CV Macro F1 \\
     \midrule
-    TF-IDF + Logistic Regression & \textbf{0.84} & \textbf{0.80} & \textbf{0.85} \\
-    CamemBERT (best, Run 2)     & 0.71          & 0.65          & 0.72 \\
+    TF-IDF + LR (\texttt{text\_clean})     & 0.841 & 0.795 & [0.728 ; 0.847] & 0.835 $\pm$ 0.011 & 0.726 $\pm$ 0.026 \\
+    TF-IDF + LR (\texttt{text\_clean\_v2}) & \textbf{0.842} & 0.794 & [0.728 ; 0.847] & \textbf{0.850 $\pm$ 0.010} & 0.730 $\pm$ 0.026 \\
+    CamemBERT fine-tuned (run 2)            & 0.710 & 0.650 & --              & --              & -- \\
+    sentence-CamemBERT frozen + LR          & 0.668 & 0.509 & [0.439 ; 0.579] & 0.651 $\pm$ 0.010 & 0.501 $\pm$ 0.031 \\
     \bottomrule
   \end{tabular}
 \end{table}
+
+A few observations before we go into more detail.
+
+\textbf{The v2 cleaning does not cost accuracy.} Removing stopwords, election dates, about 220 toponyms and an extended list of politicians' surnames leaves the test score almost identical (0.842 vs 0.841, CV 0.850 vs 0.835). On one hand it is reassuring: the classifier does not collapse once we strip what looked like the leakage. On the other hand, the fact that it does not drop at all tells us something too: the surface artefacts were not the only trace of each family. As we show below, what takes their place in the top features is still quite regional (local candidate surnames and minor city names that our hardcoded list does not cover), so what we did is more like shifting the leakage than eliminating it. A more complete cleaning would need a French NER model and a full toponym gazetteer, which we did not have time to integrate.
+
+\textbf{Contextual embeddings do worse than sparse lexical ones.} Frozen sentence-CamemBERT + LR only reaches 66.8\% test accuracy, and end-to-end fine-tuning of CamemBERT-base stops at 71\% despite its 110M parameters. This lines up with the feature analysis: the classification signal is mostly about which words appear, and 20{,}000 sparse TF-IDF features capture that more directly than a 1{,}024-dimensional semantic vector that pools everything into a single average. It also fits with what \citet{laver2003extracting} already observed on British and Irish manifestos: for short political texts with identifiable lexical markers, word frequencies often work well enough, and a heavy pretrained model does not automatically help. The frozen head is the fair comparison with TF-IDF in terms of parameter count; the fact that it still does worse suggests the gap is not just an overfitting artefact of fine-tuning.
+
+\textbf{Cross-validation narrows the variance estimate.} The 5-fold CV intervals are tight (CV accuracy $\pm$ 0.01 for both TF-IDF variants and for the frozen head), so the gap between models is not just noise from a lucky test split.
 
 \paragraph{Per-class analysis.}
-Table~\ref{tab:per_class} shows per-class F1 scores.
+Table~\ref{tab:per_class} shows per-class test F1 for all four model--preprocessing pairs. TF-IDF is the best on every class, but not to the same extent: almost perfect on Extr\^{e}me~gauche (0.96--0.98), strong on Gauche (0.86--0.87), weaker on Droite (0.57--0.60), and noisy on Extr\^{e}me~droite (0.76 from only 9 test documents). The frozen sentence-CamemBERT head drops a lot on the two minority classes (Droite 0.41, Extr\^{e}me~droite 0.22), which makes sense: with only 62 training examples for Extr\^{e}me~droite, a linear head on top of 1{,}024 dense features does not have enough examples to learn a reliable boundary.
 
 \begin{table}[h]
-  \caption{Per-class F1 scores on the test set.}
+  \caption{Per-class F1 on the held-out test set.}
   \label{tab:per_class}
   \centering
-  \begin{tabular}{lcc}
+  \begin{tabular}{lcccc}
     \toprule
-    Family & TF-IDF + LR & CamemBERT \\
+    Family & TF-IDF v1 & TF-IDF v2 & CamemBERT FT & Frozen SCaM \\
     \midrule
-    Extr\^{e}me gauche & 0.96 & 0.73 \\
-    Gauche              & 0.86 & 0.76 \\
-    Droite              & 0.60 & 0.54 \\
-    Extr\^{e}me droite  & 0.76 & 0.57 \\
+    Extr\^{e}me gauche & 0.96 & 0.98 & 0.73 & 0.66 \\
+    Gauche              & 0.86 & 0.87 & 0.76 & 0.74 \\
+    Droite              & 0.60 & 0.57 & 0.54 & 0.41 \\
+    Extr\^{e}me droite  & 0.76 & 0.76 & 0.57 & 0.22 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-TF-IDF does better than CamemBERT on every class. The easiest family to classify is Extr\^{e}me gauche (F1 = 0.96), since LO and LCR have a very recognizable vocabulary. Droite is the hardest (F1 = 0.60). To understand where errors come from, we look at the full confusion matrix (Table~\ref{tab:confusion}).
+The gap between Extr\^{e}me~gauche and Droite, consistent across models, matches what the feature analysis will show: LO and LCR have a very recognisable militant vocabulary (\textit{travailleurs}, \textit{patrons}, \textit{bourgeoisie}), whereas mainstream-right discourse shares a lot of vocabulary with the centre-left, which also shows up in the confusion matrix below (Table~\ref{tab:confusion}).
 
 \begin{table}[h]
   \caption{Confusion matrix for TF-IDF + Logistic Regression on the test set. Rows are true labels, columns are predictions.}
@@ -258,30 +281,60 @@ TF-IDF does better than CamemBERT on every class. The easiest family to classify
   \end{tabular}
 \end{table}
 
-The biggest problem is the confusion between Gauche and Droite: 76 Gauche documents are predicted as Droite, and 12 Droite ones end up classified as Gauche. This is not so surprising when you think about it, because once you take out party names, left and right candidates often say the same kind of things about employment, housing or education, with quite similar words. On the other hand, Extr\^{e}me gauche is almost never confused with other families (only 4 errors out of 175).
+The biggest problem is the confusion between Gauche and Droite: 76--80 Gauche documents are predicted as Droite, and 12--15 Droite ones end up classified as Gauche (the range matches across v1 and v2). This is not so surprising when you think about it: once you take out party names, left and right candidates often say the same kind of things about employment, housing or education, with quite similar words. On the other hand, Extr\^{e}me gauche is almost never confused with other families (4 errors out of 175).
 
-If we look at precision and recall, it is even more visible. Droite has a recall of 0.80 but a precision of only 0.48, which means the model finds most Droite documents but it also puts a lot of Gauche texts in the Droite category. So the line between mainstream left and right is really blurry in these texts. For Extr\^{e}me gauche it is the opposite: precision is 0.94 and recall 0.98, so the model almost never gets it wrong.
+If we look at precision and recall, the same thing shows up differently. Droite has a recall of 0.77--0.80 but a precision of only 0.45--0.48, which means the model finds most Droite documents but it also places a lot of Gauche texts into the Droite category. The line between mainstream left and right is genuinely blurry in these texts --- a point we return to in the discussion. For Extr\^{e}me gauche it is the opposite: precision 0.94--0.98 and recall 0.98, so the model almost never gets it wrong.
 
-\paragraph{What words drive the classification?}
-We wanted to understand what the model actually picks up on, so we looked at the logistic regression coefficients. The way it works is: since we use a one-vs-rest scheme, there is one logistic regression per class, each with 20{,}000 coefficients (one per TF-IDF feature). When we want to predict the class of a document, we compute the score of each of the four models and we take the argmax. If a word has a high coefficient in a given class, it means it pushes the prediction towards that class. So we just sort the coefficients to see which words matter the most for each family. The full list (top~20) is in Appendix~\ref{app:features}.
+\paragraph{What words drive the classification: before and after cleaning.}
+Looking at the logistic regression coefficients tells us what each model actually picks up on. We use a one-vs-rest scheme, so there is one logistic regression per class, each with 20{,}000 coefficients (one per TF-IDF feature); a positive coefficient pushes the prediction towards that class. We rank features by the signed score $\text{coef} \times \text{idf}$, which reflects how much a feature contributes in a typical document. The full top~20 per class for each cleaning variant is in Appendix~\ref{app:features}; we summarise the change below.
 
-For \textit{Extr\^{e}me gauche}, the word with the highest coefficient is ``travailleurs'' (\textit{workers}), which is very typical of LO and LCR. They always use this kind of class-struggle language. But we also see a lot of common words like ``les'', ``de'', ``des'' with high coefficients. We think this is mostly because these documents are much longer (about 6 times longer than Droite, see Table~\ref{tab:lengths}), so function words just appear more and get higher TF-IDF values.
+\textit{Baseline (\texttt{text\_clean}).} The baseline appendix table speaks for itself: the top features are dominated by stopwords and function words that rank high mainly because Extr\^{e}me gauche documents are much longer (``les'', ``de'', ``des'', ``il''), election dates (``12 juin'', ``juin 1988'', ``mars 1993''), toponyms (``guadeloupe'', ``la r\'{e}union'', ``corse'', ``metz'', ``nice''), politicians' surnames we did not strip (``le pen'', ``pen''), coalition labels (``cercle national''), and even German stopwords (``die'', ``und'') that most likely come from bilingual manifestos in Alsace or Moselle. Only a handful of genuinely political terms appear in the top~20 across classes (``travailleurs'' for the far-left, ``immigration'' for the far-right). In other words, the baseline's 84\% accuracy is built on a mix of electoral geography, a bit of political vocabulary, and some document-length effects --- not really on the political discourse we wanted to classify.
 
-For \textit{Droite}, we get things like ``notre'' (\textit{our}), ``solidarit\'{e}'', ``france unie'', but also a lot of dates (``12 juin'', ``juin 1988'') and place names (``la r\'{e}union'', ``guadeloupe'', ``corse''). The overseas departments showing up is a bit surprising. Maybe right-wing candidates there are overrepresented in our data, or maybe their texts are just different enough from the rest.
+\textit{Cleaned (\texttt{text\_clean\_v2}).} After the second cleaning pass the Extr\^{e}me gauche list becomes much more political: \textit{travailleurs}, \textit{patrons}, \textit{bourgeoisie}, \textit{travailleuses}, \textit{révolutionnaires}, \textit{petits}, \textit{payer}, \textit{maintenir emplois} are all typical of LO and LCR class-struggle rhetoric. This is a real improvement: we can now look at the model's features and recognise political content. For the Gauche class we see similar shifts towards more political features (\textit{programme commun}, \textit{union gauche}, \textit{majorité france}).
 
-For \textit{Extr\^{e}me droite}, we find ``le pen'' and ``fran\c{c}ais'' (\textit{French}) near the top. ``Le~Pen'' is still in the text because we only cleaned party names, not names of people. So FN candidates who mention their leader a lot give the model an easy shortcut, which is not ideal.
+For Droite and Extr\^{e}me droite, the cleaning exposes a second layer of leakage we did not anticipate: \emph{local candidates}. The top Droite features now include surnames that were not in our hardcoded politician list (\textit{Klifa}, \textit{Bousquet}, \textit{Zimmermann}, \textit{Rosières}, \textit{Simon}) and minor cities outside the top~100 we hardcoded (\textit{Cotentin}, \textit{Vendôme}, \textit{Rive}), plus overseas-territory vocabulary (\textit{réunionnais}, \textit{martiniquais}) that we did not treat as toponyms. The Extr\^{e}me droite list looks similar, with even more surnames (\textit{Robien}, \textit{Masson}, \textit{Guyard}, \textit{Debré}) and region-specific terms (\textit{Evry}, \textit{pays basque}). For these two classes we mostly shifted the leakage from dates/places to people and minor cities. One plausible reading, which we would need more work to confirm, is that the right-wing portion of the corpus is more \emph{candidate-centric} than the left-wing one: mainstream-right \textit{professions de foi} seem to build identity around the local incumbent more than around a national ideological vocabulary. We did not have time to integrate a French named-entity recogniser or a full INSEE commune gazetteer, and we flag this as a limitation (Section~\ref{sec:discussion}).
 
-For \textit{Gauche}, ``communiste'' and ``gauche'' show up as important features. Same thing here: we remove ``Parti Communiste Fran\c{c}ais'' but not the word ``communiste'' alone. So when a candidate writes ``je suis candidat communiste'' or ``candidat de gauche'', these words stay in the text and help the model.
+\subsection{Temporal generalisation}
+\label{sec:temporal}
 
-So to sum up, the classifier uses a mix of real political vocabulary, text length effects, and some words that our cleaning did not catch. The good performance on Extr\^{e}me gauche probably comes from both the militant vocabulary and the fact that these texts are so much longer.
+The held-out test split above is i.i.d.: train and test documents are drawn from the same election years. But the corpus spans twenty years of French politics, which is a long time over which both party landscapes and candidates' discourse change. To test how much of the model's performance relies on era-specific signal rather than on stable ideology, we re-run TF-IDF and the frozen head after re-splitting the corpus by year. Table~\ref{tab:temporal} reports the results.
 
-\paragraph{CamemBERT analysis.}
-CamemBERT overfits pretty clearly: the training loss keeps going down (from 1.18 to 0.43 in 5 epochs) but the validation accuracy plateaus after epoch 2, at around 72\%. With only 3{,}163 training documents for 110M parameters, it just memorizes instead of learning anything general. Also, since the signal is mostly about specific words, CamemBERT's contextual representations do not really help because TF-IDF already captures what matters. The 512-token limit makes things worse too: Extr\^{e}me gauche texts are around 6{,}700 words but CamemBERT only sees the first 512 tokens, so it misses most of the text. And there are only 43 Extr\^{e}me droite documents in the train set, so even with weighted loss the model cannot really learn this class properly. At the end of the day, a simple bag-of-words beats a large pretrained model here, which is kind of an interesting finding.
+\begin{table}[h]
+  \caption{Temporal-split evaluation: train on documents with year $\leq$ \textit{early}, test on year $\geq$ \textit{late}. The held-out i.i.d. test accuracy is reproduced on the first row for reference.}
+  \label{tab:temporal}
+  \centering
+  \small
+  \begin{tabular}{llcccc}
+    \toprule
+    \multirow{2}{*}{Protocol} & \multirow{2}{*}{Test years} &
+      \multicolumn{2}{c}{TF-IDF v2 + LR} & \multicolumn{2}{c}{Frozen SCaM + LR} \\
+    \cmidrule(lr){3-4} \cmidrule(lr){5-6}
+    & & Acc & Macro F1 & Acc & Macro F1 \\
+    \midrule
+    i.i.d.\ held-out (baseline)             & 1973--1993 & 0.842 & 0.794 & 0.668 & 0.509 \\
+    Train $\leq$ 1981, Test $\geq$ 1988     & 1988, 1993 & \textbf{0.723} & 0.511 & 0.422 & 0.282 \\
+    Train $\leq$ 1978, Test $\geq$ 1988     & 1988, 1993 & 0.720 & 0.483 & 0.371 & 0.246 \\
+    Train $\leq$ 1988, Test = 1993          & 1993       & 0.593 & 0.424 & 0.493 & 0.340 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\textbf{i.i.d.\ vs temporal accuracy: a 12--25-point drop on TF-IDF.} The i.i.d.\ test accuracy of 0.842 drops to 0.72 when the test set is from a later era, and to 0.59 when we train on 1973--1988 and test on 1993 alone. The 1993 election is the hardest to predict: the ballot composition is quite different from earlier years (the RPR and UDF ran joint candidates under the Union pour la France banner, and the FN reached its legislative peak at about 12\% of the vote), so the classifier has to apply features learned on older coalition structures to a reshaped ballot. The per-year breakdown (cf.\ Appendix~\ref{app:errors}) confirms this pattern: TF-IDF test accuracy is above 0.90 on 1973, 1978 and 1981, drops to 0.71 on 1988 and 0.79 on 1993 under the i.i.d.\ split, and the drop on 1993 is much sharper under the temporal split.
+
+\textbf{The frozen head is hit about twice as hard by the temporal shift.} The sentence-CamemBERT head loses about 25 points of accuracy between its i.i.d.\ test (0.668) and the temporal-shift test (0.422), which is roughly twice the TF-IDF drop in absolute terms. One plausible reading is the following: TF-IDF captures fine-grained lexical markers, some of which probably stay stable across elections (class-struggle vocabulary for the far-left is a good candidate), while the sentence-CamemBERT embedding compresses the document into a semantic representation that summarises \emph{content} (employment, immigration, foreign policy) --- and content topics shift more between eras than isolated ideological words do. We flag this as a tentative interpretation that would need more work (e.g.\ per-year coefficient stability) to confirm.
+
+\textbf{Takeaway.} The i.i.d.\ accuracy (0.842) looks optimistic for any use case in which we would want to apply the model to a new election. A 0.72 accuracy on held-out years is closer to what we should expect if, for example, the method were used to pre-label Archelec documents from a year that has not yet been transcribed.
+
+\paragraph{Error analysis by length, year and OCR quality.}
+We cross the held-out test predictions with three document-level covariates to see where the models succeed and fail (Figure~\ref{fig:err_buckets}). Three patterns stand out. First, accuracy increases with document length for TF-IDF: 0.56 on short documents ($<$500 tokens), 0.68 on 500--1{,}500, 0.95 on 1{,}500--3{,}000, and 0.97 above 3{,}000. Longer manifestos give TF-IDF more lexical evidence, and since Extr\^{e}me gauche documents are on average much longer than Droite ones (Table~\ref{tab:lengths}), the length effect probably helps explain the high F1 on that class. The frozen head follows the same trend but flatter, which makes sense for a fixed-dimensional embedding that averages over all tokens. Second, across years the TF-IDF test accuracy peaks in 1973--1981 (above 0.90) and dips at 1988 (0.71), which matches the political realignment of the decade (the \textit{alternance} of 1981, the cohabitation of 1986--1988, and the FN's rise in vote share from 1988 onwards). Third, the OCR-quality proxy we tried (ratio of non-alphabetic characters) is not discriminative: almost all documents fall below 10\%, so we cannot separate clean from noisy OCR this way. A better proxy would use token-level anomalies or the OCR confidence from the Teklia pipeline, which we do not have with the raw text files we received.
+
+\paragraph{Why end-to-end fine-tuning does not help.}
+CamemBERT overfits quickly: the training loss keeps going down (from 1.18 to 0.43 in 5 epochs) but the validation accuracy plateaus after epoch 2 at around 72\%. With only 3{,}163 training documents for 110M parameters, this is not too surprising. The frozen head we added (Section~\ref{sec:frozen}) is a natural control: same pretrained encoder, much fewer trainable parameters, and the result is actually \emph{worse} on the i.i.d.\ test (0.668 vs 0.71). So the fine-tuning gain of about 4 accuracy points over the frozen head is real but small, and comes with a clear overfitting risk. On this corpus, the main signal seems to be lexical (which specific words appear), and TF-IDF + LR captures that more directly than either transformer variant. On top of that, the 512-token truncation cuts most of the long Extr\^{e}me gauche manifestos (which average $\sim$6{,}700 words), and the Extr\^{e}me droite class only has 43 training examples, both of which make things harder for the transformer.
 
 \subsection{Semantic mapping}
 \label{sec:mapping}
 
-For this part, we use all labeled documents including the \'{E}cologistes that we excluded from classification (since here we are not predicting anything, just visualizing proximity, there is no reason to remove them). Figure~\ref{fig:tsne} shows the t-SNE projection of all document embeddings, colored by political family. There is some left-right separation (blue points for Droite tend to be on one side, red points for Gauche and Extr\^{e}me gauche on the other) but the overlap in the middle is significant. The families are not clearly separated, which is consistent with what the classifier showed.
+For this part, we use all labeled documents (we do not exclude any class since we are not predicting but only visualising proximity). Figure~\ref{fig:tsne} shows the t-SNE projection of all document embeddings, coloured by political family. There is some left-right separation (blue points for Droite tend to be on one side, red points for Gauche and Extr\^{e}me gauche on the other) but the overlap in the middle is significant. The families are not clearly separated, which is consistent with what the classifier showed.
 
 \begin{figure}[h]
   \centering
@@ -308,42 +361,83 @@ We also tried to look at how discourse evolves over the years. For this, we comp
   \label{fig:temporal}
 \end{figure}
 
+\paragraph{UMAP as a second view, plus clustering metrics.}
+t-SNE optimises local structure and can deform global distances, so we generate a second projection with UMAP (cosine metric, n\_neighbours = 15, min\_dist = 0.1) to sanity-check the picture (Figure~\ref{fig:umap}). The layout differs in detail but the same qualitative pattern holds: no clean family-level clusters, left--right separation partial at best. To put a number on this, we compute the silhouette coefficient and the Davies--Bouldin index of the \textit{family} partition on three representations: the raw 1{,}024-dimensional embeddings, the t-SNE 2D projection, and the UMAP 2D projection (Table~\ref{tab:clustering}).
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.9\linewidth]{umap_by_family.png}
+  \caption{UMAP projection of document embeddings, coloured by political family. The qualitative picture is the same as under t-SNE: overlapping distributions, partial left--right separation, no clean per-family clusters.}
+  \label{fig:umap}
+\end{figure}
+
+\begin{table}[h]
+  \caption{Cluster quality of the political-family partition on the sentence-CamemBERT embeddings. Silhouette is in $[-1, 1]$ (higher is better, 0 = no cluster structure); Davies--Bouldin is non-negative (lower is better).}
+  \label{tab:clustering}
+  \centering
+  \begin{tabular}{lcc}
+    \toprule
+    Representation & Silhouette & Davies--Bouldin \\
+    \midrule
+    Raw 1024-d embeddings (cosine) & $-0.022$ & 7.56 \\
+    t-SNE 2D (euclidean)           & $-0.096$ & 5.68 \\
+    UMAP 2D (euclidean)            & $-0.164$ & 5.74 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The silhouette is slightly negative in all three views, which formalises what the plots suggest: an average document is roughly as close to documents from its own family as to documents from other families. This matches the confusion-matrix finding that mainstream Gauche and Droite overlap substantially; it also matches the 66.8\% test accuracy of the frozen head, which has to work from these same embeddings through only a linear boundary. The UMAP score is the worst, but we do not read this as ``UMAP is worse than t-SNE''; it just means UMAP places a few family-mixed regions in the centre of the plot, pulling the silhouette down.
+
+\paragraph{Per-party trajectories in the embedding space.}
+The 18 family-year t-SNE points in Figure~\ref{fig:temporal} were too few to see much. We increase the granularity by taking the mean embedding of each (party, election year) pair restricted to parties with at least 10 documents and present in at least two elections. This gives us trajectories for eleven parties: PCF, LO, PS, MRG, RPR, UDF, FN, Union Gauche, LCR, RI, and ``Maj. Pr\'{e}sidentielle''. We project the 4{,}519 document embeddings with UMAP and place each party-year mean under the same transformation for consistency (Figure~\ref{fig:trajectories}).
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.95\linewidth]{party_trajectories.png}
+  \caption{Per-party discourse trajectories, 1973--1993, in the UMAP space of document embeddings. Each dot is the mean embedding of a party in a given election year; lines connect successive years of the same party. Only parties with $\geq 10$ documents and present in $\geq 2$ elections are drawn.}
+  \label{fig:trajectories}
+\end{figure}
+
+Two observations. PCF and LO move the least: their embedding barycentre drifts in a tight region, consistent with their stable class-struggle vocabulary, and aligning with their F1 = 0.98 on the classifier. The RPR trajectory, by contrast, moves substantially between 1973 and 1993, which is what the temporal-split result already suggested: the right-of-centre vocabulary is not the same in 1973 (Gaullist majority, pre-1981) and in 1993 (post-cohabitation, two coalition banners). This is one concrete explanation for why the temporal split damages accuracy more for the Droite class than for Extr\^{e}me gauche.
+
 %----------------------------------------------------------------------
 \section{Discussion}
 \label{sec:discussion}
 %----------------------------------------------------------------------
 
-The main result is that TF-IDF with logistic regression reaches 84\% accuracy even after removing all explicit party names from the text. CamemBERT, despite being a much larger model, only gets to 71\%. We initially expected CamemBERT to be better, because it can capture contextual information that TF-IDF ignores. But in practice, the discriminative signal in \textit{professions de foi} seems to be mostly about which specific words are used, not about how they relate to each other in context. A simple bag-of-words is enough to pick up on that.
+Our main accuracy number does not change much between the baseline and the cleaned setup (84\% $\to$ 84\%), but what that accuracy actually measures does. Before the cleaning, TF-IDF reached 84\% by relying on a mix of election dates, toponyms, politicians' surnames and a few real ideological markers. After the cleaning, it still reaches 84\%, but the top features for Extr\^{e}me gauche are now \textit{travailleurs}, \textit{patrons}, \textit{bourgeoisie}, \textit{révolutionnaires}, \textit{travailleuses} --- typical LO/LCR vocabulary. For that class at least, the model is now picking up on political content in the way we originally wanted. \citet{laver2003extracting} observed something similar on British and Irish manifestos: short political texts are already separable at the word-frequency level, without any contextual model. We see the same pattern on French \textit{professions de foi}, and we also found that how you decide what words count as ``informative'' changes the interpretation of the score quite a lot.
 
-The feature analysis from Section~\ref{sec:results} helps explain this. Basically, the classifier picks up on a few keywords that are very specific to each political family. For example, Extr\^{e}me gauche texts use words like ``travailleurs'' or ``lutte'' that you almost never find in other families, and that is enough to get F1 = 0.96. \citet{laver2003extracting} showed something similar with their Wordscores method: just looking at word frequencies in political texts is enough to estimate where parties stand, even though their method puts parties on a continuous left-right scale instead of classifying them. Our results point in the same direction: word-level features work well for this kind of task. We also noticed that some of the top features are not really about political discourse. ``Le~Pen'' comes up as a strong feature for Extr\^{e}me droite because FN candidates often mention their leader, and we only clean party names, not people's names. ``communiste'' and ``gauche'' also stay in the text because we remove full names like ``Parti Communiste Fran\c{c}ais'' but not single words. We decided to keep it that way because these words are part of how candidates talk about their political identity. It is not exactly data leakage, but it does help the model.
+For the Droite and Extr\^{e}me droite classes, the outcome is more humbling. Even after removing around 220 toponyms and 20+ politician names, the top features are still mostly local candidates' surnames (Klifa, Bousquet, Zimmermann, Debré, Robien, Masson, Guyard, \ldots) and minor place names (Cotentin, Vendôme, Evry, pays basque). In other words, the leakage shifted from the category we expected (Mitterrand/Chirac, Paris/Marseille) to a secondary one we did not. Two things follow. First, a more reproducible cleaning would probably need a French NER model and a full INSEE commune gazetteer; a handcrafted wordlist is not enough. Second, and more interesting, this regional/candidate-level signal is also a real feature of French legislative elections: each candidate campaigns in one constituency, is often a local notable, and their \textit{profession de foi} mentions themselves, their township, and local issues. The right-wing portion of the corpus in particular seems more candidate-centric than the left-wing portion, which has a stronger national ideological vocabulary. So the ``leakage'' is partly a property of the object itself, and a classifier that ignored all of it would lose real signal.
 
-Another thing worth discussing is the confusion between Gauche and Droite. The confusion matrix shows that 76 Gauche texts get predicted as Droite, and 12 the other way around, which is the biggest source of error. We think this makes sense if you consider the political context: during 1973--1993, France went through the \textit{alternance} of 1981 (first left-wing president) and then the \textit{cohabitation} periods. After these events, the PS and the mainstream right started using more and more similar language, and both talk about employment, housing, modernization, etc. So the fact that the classifier has trouble telling them apart is not that surprising, it actually reflects something real about how political discourse evolved. The cosine similarity heatmap (Figure~\ref{fig:cosine}) shows the same thing: most parties end up with similarity above 0.90, so their discourse is really quite close. The RPCR is the only real outlier (it is a party from New Caledonia with completely different concerns). We can also see that LO and PSU are a bit further from right-wing parties, which makes sense given their more radical positions.
+The Gauche--Droite confusion (76--80 false Gauche$\to$Droite predictions, 12--15 the other way) is the classifier's biggest error source and, we think, the most interesting finding from a political-science angle. It matches a well-documented phenomenon: after the 1981 \textit{alternance} and the first cohabitation (1986--1988), the Parti Socialiste and the mainstream right started to use overlapping vocabulary on common themes (employment, housing, modernisation of public services). The per-party trajectories in Figure~\ref{fig:trajectories} show this: the RPR barycentre moves a lot across elections, while the PCF's stays close to itself. From an NLP standpoint, this means the four classes are not equidistant: Extr\^{e}me gauche is a tight cluster with a fixed vocabulary (high precision and recall), while Gauche and Droite overlap a lot in the embedding space (the negative silhouette in Table~\ref{tab:clustering} makes this quantitative), which no linear model can cleanly separate without relying on non-political signals.
 
-Regarding the embeddings, we first tried using CamemBERT base \texttt{[CLS]} tokens but it did not work at all: cosine similarities were all above 0.98, so everything looked the same (see Appendix~\ref{app:cls_failure}). We had to switch to a sentence-transformer to get useful results.
+The temporal-split drop (Section~\ref{sec:temporal}) tells a similar story in numbers. When train and test share elections, both models benefit from era-specific signals; when they do not, TF-IDF loses 12 accuracy points and the frozen head loses 25. The fact that the frozen head is hit harder is probably informative: sentence embeddings summarise a document into a topical representation, and the topics themselves shift across a 20-year period; TF-IDF, being lexical, keeps hold of a few more stable markers (the far-left vocabulary is our best candidate). A natural line of work for small historical corpora, that we did not have time to try, would be to combine sparse lexical and dense semantic features and to evaluate explicitly with a temporal split.
 
-As for CamemBERT, we think there are a few reasons why it does worse. The dataset is small (3{,}163 training examples for 110M parameters), so the model overfits, which we can see clearly in the training curves. But it is not just about data size. The signal in these texts is mostly about which words appear, not about how they relate to each other in context. TF-IDF captures that kind of signal just fine, so CamemBERT does not really add anything. On top of that, the 512-token limit hurts a lot: Extr\^{e}me gauche texts are around 6{,}700 words on average, so CamemBERT only sees the beginning. TF-IDF uses the whole text, which is a big advantage here.
+On the semantic mapping itself: we first tried the CamemBERT base \texttt{[CLS]} token, which collapsed every profession de foi into a near-identical vector (all pairwise cosines above 0.98, see Appendix~\ref{app:cls_failure}), because CamemBERT-base is trained for masked language modelling and does not produce document-level embeddings where cosine similarity is informative. Switching to \texttt{dangvantuan/sentence-camembert-large} --- a CamemBERT-large further trained on a French sentence-similarity dataset --- was what made the geometry usable. The cosine heatmap and the UMAP both agree with the classifier's confusion matrix: most parties sit above 0.90 cosine to each other, RPCR (New Caledonia) is the only clear outlier, and silhouette is slightly negative even on the raw 1{,}024-dimensional embeddings. The space seems to encode discourse \emph{style} more than ideological programme.
 
 \paragraph{Limitations.}
-First, our regex labeling only works when the party name is written in the text. Left-wing parties like PCF or LO almost always state their name, but right-wing candidates often run under coalition labels or do not mention a party at all. This is why we have more left-wing than right-wing documents.
+First, our regex labelling only works when the party name is written in the text. Left-wing parties like PCF or LO almost always state their name, but right-wing candidates often run under coalition labels or do not mention a party at all. This explains most of the class imbalance.
 
-Second, as we mentioned, words like ``communiste'', ``gauche'', or ``Le~Pen'' are still in the cleaned text. We chose to only remove full party names, not individual political words, because they are part of how candidates express their views. But it means the classifier partly relies on these markers.
+Second, even with our v2 cleaning, the TF-IDF classifier still uses local candidate surnames and minor city names. We hardcoded the ${\sim}100$ French departments, the main historical regions, and around one hundred cities; scaling to the $\sim$36{,}000 INSEE communes would require a downloadable gazetteer (we ran out of time to integrate one), and a proper French NER would catch the candidate names we missed. We flag this in Section~\ref{sec:results}.
 
-Third, the OCR quality is not the same across years. Older documents (1973, 1978) have more errors, and we did not try to correct them. It adds noise but we are not sure how much it matters in practice.
+Third, OCR quality is uneven across years (older manifestos have more errors), but the simple non-alphabetic-ratio proxy we used is not discriminative enough to confirm a quantitative effect. A more meaningful OCR-quality score would read the confidence values produced by the Teklia OCR pipeline, which we did not have access to.
 
-Fourth, CamemBERT only reads the first 512 tokens, so it misses most of the longer documents. We thought about chunking or hierarchical models but it seemed too complex for the potential gain. Also, the t-SNE plots should be read carefully because t-SNE can distort distances, and the temporal plot (Figure~\ref{fig:temporal}) only has 18 points.
+Fourth, CamemBERT-base only reads the first 512 tokens and is therefore penalised on long Extr\^{e}me gauche manifestos. We did not implement a chunking or hierarchical variant in this sprint; a cheap version --- split in 512-token windows, pool logits --- is an obvious next step.
 
-Finally, the big difference in text length between families (Table~\ref{tab:lengths}) means that TF-IDF partly captures length instead of content. A 6{,}000-word document will have higher scores for common words than a 1{,}000-word one, just because there are more words. We did not normalize for this, and it probably helps explain the good performance on Extr\^{e}me gauche.
+Fifth, we did not attempt continued masked-language-model pretraining on the corpus. Because the 1973--1993 French political register differs from the web corpora CamemBERT was pretrained on, domain-adaptive pretraining is the other natural next step to improve both the fine-tuned and the frozen variants, especially if the goal is temporal generalisation.
+
+Finally, the text-length gap between families (Table~\ref{tab:lengths}) means that TF-IDF partly captures length. A 6{,}000-word document accumulates more high-idf evidence than a 1{,}000-word one, and we did not length-normalise. This is part of why Extr\^{e}me gauche is easier to classify than Droite.
 
 %----------------------------------------------------------------------
 \section{Conclusion}
 \label{sec:conclusion}
 %----------------------------------------------------------------------
 
-To sum up, we showed that a TF-IDF logistic regression can predict political families from \textit{professions de foi} with 84\% accuracy, even after removing party names. CamemBERT only gets to 71\%, mostly because the dataset is small, the signal is in the words themselves (not in context), and the 512-token limit cuts most of the longer documents. When we looked at what words the model relies on, we found political vocabulary like ``travailleurs'' for the far left, but also some words that our cleaning missed (``Le~Pen'', ``communiste''). The sentence-transformer embeddings show that most parties talk in a pretty similar way (cosine similarity above 0.90), except for outliers like the RPCR.
+We started from a fairly standard result --- TF-IDF at 84\%, CamemBERT fine-tuned at 71\% on \textit{professions de foi} --- and tried to understand what that 84\% actually measures. Looking at the top features showed a mix of election dates, toponyms and politicians' surnames hiding under the score; a second cleaning pass pushed most of the Extr\^{e}me gauche top features back to a proper political vocabulary, while also exposing a second layer of signal we did not expect: French legislative elections are candidate-centric, so a \textit{profession de foi} mentions the candidate and their township, and these local references are correlated with party family. A data-efficient frozen sentence-CamemBERT head with about 4{,}100 trainable parameters does worse than TF-IDF (67\% vs 84\%) and serves as a control for the fine-tuned run, suggesting that the 84\% ceiling is set by the representation itself rather than by the classifier on top. A temporal split cuts TF-IDF accuracy from 84\% to 72\% and the frozen head from 67\% to 42\%, which is probably closer to what we should expect if we wanted to apply the classifier to a new election. Finally, silhouette and Davies--Bouldin on the sentence embeddings confirm numerically what t-SNE already suggested: political families overlap heavily in the embedding space, with Extr\^{e}me gauche being the only really tight cluster.
 
-What we found maybe most interesting is the confusion between Gauche and Droite. It seems to reflect a real convergence in how mainstream parties talk, at least during this period, which is something political scientists have written about, but here we can see it just from the text.
+The most interesting finding, from a political-science point of view, is the Gauche--Droite overlap: the two classes share a lot of vocabulary, which matches the observation that after the 1981 \textit{alternance} the mainstream left and right converge stylistically. Conversely, the stability of the PCF/LO vocabulary across the 20 years covered by the corpus is what keeps those classes cleanly separable.
 
-A possible extension would be to match candidates against electoral databases to label more right-wing documents. It would also be interesting to try this on more recent elections to see if party discourses have become more or less different over time.
+We list a few natural next steps that were out of scope here: a proper French NER plus an INSEE commune gazetteer to remove the second-order leakage; continued masked-language-model pretraining of CamemBERT on the corpus to adapt the encoder to 1970--1990s French political language; a chunk-pooled fine-tune to bypass the 512-token limit; and matching candidates against the Archelec metadata (if available) to get ground-truth affiliations, which would reduce the dependence on our regex labels, especially on the minority right-wing classes. A follow-up on more recent \textit{professions de foi} (2017, 2022) would also extend the trajectory analysis to present-day French politics.
 
 \begin{ack}
 This work was conducted as part of the NLP course at ENSAE Paris (2025--2026). We thank the Archelec project at Sciences Po for making the corpus available, and Christopher Kermorvant for providing the OCR'd text files.
@@ -363,6 +457,16 @@ Sciences~Po, CEVIPOF.
 M.~Laver, K.~Benoit, and J.~Garry.
 \newblock Estimating policy positions from political texts using words as data.
 \newblock \emph{American Political Science Review}, 97(2):311--331, 2003.
+
+\bibitem[Slapin and Proksch(2008)]{slapin2008scaling}
+J.~B. Slapin and S.-O. Proksch.
+\newblock A scaling model for estimating time-series party positions from texts.
+\newblock \emph{American Journal of Political Science}, 52(3):705--722, 2008.
+
+\bibitem[Reimers and Gurevych(2019)]{reimers2019sentence}
+N.~Reimers and I.~Gurevych.
+\newblock {S}entence-{BERT}: Sentence embeddings using {S}iamese {BERT}-networks.
+\newblock In \emph{Proceedings of EMNLP}, pages 3982--3992, 2019.
 
 \bibitem[Martin et~al.(2020)]{martin2020camembert}
 L.~Martin, B.~Muller, P.~J.~Ortiz~Su\'{a}rez, Y.~Dupont, L.~Romary, E.~de~la~Clergerie, D.~Seddah, and B.~Sagot.
@@ -387,16 +491,21 @@ A.~Volkens, P.~Lehmann, N.~Merz, S.~Regel, and A.~Werner.
 \section{Implementation details}
 \label{app:implementation}
 
-All code is available on GitHub\footnote{\url{https://github.com/MaelTremouille/political-text-classification}}. The pipeline described in Sections~\ref{sec:data}--\ref{sec:results} consists of four scripts:
+All code is available on GitHub\footnote{\url{https://github.com/MaelTremouille/political-text-classification}}. The pipeline consists of the following scripts:
 
 \begin{enumerate}
-    \item \texttt{data\_preparation.py}: parses raw text files, filters \textit{professions de foi}, aggregates multi-page documents, and produces a Parquet file.
-    \item \texttt{label\_extraction.py}: extracts party labels via regex, removes party mentions from text, assigns political families, and creates stratified train/val/test splits.
-    \item \texttt{classification.py}: trains the TF-IDF baseline and fine-tunes CamemBERT, evaluates both on the test set, and saves results.
-    \item \texttt{political\_mapping.py}: extracts sentence-transformer embeddings, computes similarity matrices, and produces visualization figures.
+    \item \texttt{src/data\_preparation.py}: parses raw text files, filters \textit{professions de foi}, aggregates multi-page documents, produces \texttt{data/corpus\_by\_document.parquet}.
+    \item \texttt{src/label\_extraction.py}: extracts party labels via regex, removes party-name mentions from text (producing \texttt{text\_clean}), assigns political families, and creates stratified train/val/test splits (seed 42).
+    \item \texttt{src/preprocessing.py}: builds the aggressively-cleaned \texttt{text\_clean\_v2} column by successively masking stopwords, dates, $\sim$220 hardcoded toponyms (departments, regions, major cities), and an extended list of politicians' surnames.
+    \item \texttt{src/classification.py}: trains the TF-IDF baseline and fine-tunes CamemBERT on \texttt{text\_clean}, evaluates both on the test set, appends to \texttt{data/results.txt}. (Unchanged from the initial run; the fine-tuned CamemBERT numbers quoted in the paper come from this script's latest run.)
+    \item \texttt{src/evaluation.py}: re-runs TF-IDF + LogReg on an arbitrary text column (\texttt{text\_clean} or \texttt{text\_clean\_v2}), reports held-out test metrics with bootstrap CI, 5-fold stratified CV, three temporal splits, and the top-20 features per class.
+    \item \texttt{src/frozen\_classifier.py}: fits a logistic regression on pre-computed sentence-CamemBERT embeddings (no transformer parameter is updated), runs the same three protocols.
+    \item \texttt{src/political\_mapping.py}: extracts sentence-transformer embeddings, t-SNE projection, cosine heatmap (unchanged from initial run).
+    \item \texttt{src/semantic\_mapping\_v2.py}: UMAP projection, silhouette + Davies--Bouldin metrics, per-party temporal trajectories.
+    \item \texttt{src/error\_analysis.py}: breaks down test accuracy by document length, election year, and OCR-quality proxy for both TF-IDF~v2 and the frozen head.
 \end{enumerate}
 
-CamemBERT fine-tuning was performed on an Apple M-series chip (MPS backend). Each training epoch takes approximately 30 minutes.
+CamemBERT fine-tuning was performed on an Apple M-series chip (MPS backend). Each training epoch takes approximately 30 minutes. All the data-efficient variants (preprocessing, TF-IDF, frozen classifier, UMAP, error analysis, 5-fold CV, bootstrap CI, temporal splits) run on CPU in under 15~minutes combined, on the same machine.
 
 \newpage
 \section{CamemBERT training configurations}
@@ -431,15 +540,38 @@ We addressed this by switching to a sentence-transformer model (\texttt{dangvant
 \end{figure}
 
 \newpage
-\section{Top 20 TF-IDF features per class}
+\section{Error analysis: per-year and per-length accuracy}
+\label{app:errors}
+
+Figure~\ref{fig:err_buckets} complements the discussion in Section~\ref{sec:results} by plotting held-out test accuracy of TF-IDF v2 and of the frozen sentence-CamemBERT head against document length (in tokens) and election year. Together they confirm (i) a monotonic length effect for TF-IDF (long documents are easier because they contain more lexical evidence) and (ii) an accuracy dip on 1988, the election marking the political realignment around the cohabitation and the FN's emergence as a major force.
+
+\begin{figure}[h]
+  \centering
+  \begin{subfigure}[b]{0.48\textwidth}
+    \includegraphics[width=\linewidth]{acc_by_length.png}
+    \caption{by document length (tokens)}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \includegraphics[width=\linewidth]{acc_by_year.png}
+    \caption{by election year}
+  \end{subfigure}
+  \caption{Held-out test accuracy per covariate bucket, TF-IDF v2 vs frozen sentence-CamemBERT.}
+  \label{fig:err_buckets}
+\end{figure}
+
+\newpage
+\section{Top 20 TF-IDF features per class: before and after cleaning}
 \label{app:features}
 
-Table~\ref{tab:top_features} shows the 20 features with the highest logistic regression coefficients for each political family. Since our TF-IDF uses both unigrams and bigrams, some features are single words (like ``travailleurs'') and others are pairs of words (like ``france unie'', marked with * in the table). This is why we sometimes see a word appear both alone and inside a bigram.
+We report the 20 features with the highest $\text{coef} \times \text{idf}$ score for each political family, under both cleaning pipelines. Because our TF-IDF uses both unigrams and bigrams, some features are single words (``travailleurs'') and others are bigrams (``france unie''; marked with * in Table~\ref{tab:top_features}).
 
-A few things stand out. There are a lot of dates (``12 juin'', ``28 mars'', ``mars 1973'') and place names (``guadeloupe'', ``la r\'{e}union'', ``metz'', ``nice'') which do not really have anything to do with political discourse, they just reflect when and where elections were held. We also found German words (``die'', ``und'') in the Extr\^{e}me gauche list, which probably come from bilingual manifestos in Alsace. The more interesting features are the genuinely political ones: ``travailleurs'' for the far left, ``immigration'' and ``fran\c{c}ais abord'' (\textit{French first}) for the far right.
+\paragraph{Baseline (\texttt{text\_clean}): where the 84\% came from.} Table~\ref{tab:top_features} is dominated by three categories that have nothing to do with political discourse: stopwords and function words (``les'', ``de'', ``des'', ``il'', ``la'', which rank high for Extr\^{e}me gauche mostly because these manifestos are much longer than others), election dates (``12 juin'', ``juin 1988'', ``mars 1993''), French place names (``guadeloupe'', ``la r\'{e}union'', ``corse'', ``metz'', ``nice'', ``haute sa\^{o}ne''). Politicians' surnames (``le pen'', ``pen'') and the word ``cercle national'' leak through because we only masked full party names. German tokens (``die'', ``und'') come from bilingual Alsatian manifestos. Only a handful of genuinely political features appear: ``travailleurs'' for the far-left, ``immigration'' and ``fran\c{c}ais abord'' (\textit{French first}) for the far-right.
+
+\paragraph{After v2 cleaning: a political top-20 for the far-left, local leakage for the right.} Table~\ref{tab:top_features_v2} shows the same ranking after the v2 pipeline removes stopwords, dates, the 101 departments + major cities, and an extended list of politicians' surnames. The Extr\^{e}me gauche column is now political: \textit{travailleurs}, \textit{patrons}, \textit{maintenir emplois}, \textit{bourgeoisie}, \textit{travailleuses}, \textit{payer}, \textit{r\'{e}volutionnaires}, \textit{petits} are all textbook LO/LCR markers. The Gauche column mixes stable programme-level terms (\textit{union gauche}, \textit{programme commun}, \textit{appellent}, \textit{majorit\'{e} france}) with Hautes-Alpes / Morlaix / Briey / Montb\'{e}liard style micro-toponyms we did not catch. The Droite and Extr\^{e}me droite columns remain heavily contaminated by local-candidate surnames (Klifa, Bousquet, Zimmermann, Robien, Masson, Guyard, Debr\'{e}) and minor place names (Cotentin, Vend\^{o}me, Rive, Evry, pays basque). We discuss this residual signal in Section~\ref{sec:results}: it is not only leakage but also a real feature of French legislative elections, where mainstream-right candidates build identity around the local incumbent more than around a national ideological vocabulary.
 
 \begin{table}[h]
-  \caption{Top 20 TF-IDF features per political family, ranked by logistic regression coefficient. Features can be unigrams or bigrams (marked with *).}
+  \caption{Top 20 TF-IDF features per political family, \emph{baseline} (\texttt{text\_clean}). Coefficients from the LR model; bigrams marked with *. Entries in \textbf{bold} are genuinely political; most of the rest are election dates, toponyms, or name leakage.}
   \label{tab:top_features}
   \centering
   \small
@@ -492,6 +624,64 @@ A few things stand out. There are a lot of dates (``12 juin'', ``28 mars'', ``ma
     0.63 & loir         & 0.98 & marie le* \\
     0.62 & je           & 0.96 & haute \\
     0.59 & \'{e}coute   & 0.95 & immigration \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[h]
+  \caption{Top 20 TF-IDF features per political family, \emph{v2 cleaned} (\texttt{text\_clean\_v2}). Ranked by $\text{coef} \times \text{idf}$. Bigrams marked with *. The Extr\^{e}me gauche column is now unambiguously political; the two right-of-centre columns show residual candidate/micro-toponym leakage.}
+  \label{tab:top_features_v2}
+  \centering
+  \small
+  \begin{tabular}{rlrl}
+    \toprule
+    \multicolumn{2}{c}{\textbf{Extr\^{e}me gauche}} & \multicolumn{2}{c}{\textbf{Gauche}} \\
+    Score & Feature & Score & Feature \\
+    \midrule
+    6.39 & travailleurs          & 2.63 & candidat d\'{e}mocrates* \\
+    3.66 & patrons               & 2.54 & montb\'{e}liard \\
+    3.55 & maintenir emplois*    & 2.47 & vichy \\
+    3.54 & lure                  & 2.42 & ballottage \\
+    3.39 & bourgeoisie           & 2.35 & castres \\
+    3.24 & dieppe                & 2.33 & hautes alpes* \\
+    3.12 & riom                  & 2.31 & bourson \\
+    3.00 & travailleuses         & 2.27 & union gauche* \\
+    2.86 & payer                 & 2.26 & morlaix \\
+    2.73 & r\'{e}volutionnaires  & 2.21 & programme commun* \\
+    2.72 & travailleuses travailleurs* & 2.20 & majorit\'{e} france* \\
+    2.59 & avertissement         & 2.18 & 9e \\
+    2.49 & tulle                 & 2.14 & creusois \\
+    2.39 & weber                 & 2.12 & partei \\
+    2.27 & alpes haute*          & 2.07 & appellent \\
+    2.26 & lcr                   & 2.06 & dinan \\
+    2.24 & vendre                & 2.05 & scrutin ballottage* \\
+    2.22 & arthur                & 2.05 & briey \\
+    2.21 & werden                & 1.98 & montagne \\
+    2.20 & petits                & 1.92 & madeleine \\
+    \midrule
+    \multicolumn{2}{c}{\textbf{Droite}} & \multicolumn{2}{c}{\textbf{Extr\^{e}me droite}} \\
+    Score & Feature & Score & Feature \\
+    \midrule
+    5.63 & r\'{e}unionnais       & 7.86 & robien \\
+    5.38 & vend\^{o}me           & 7.66 & masson \\
+    3.55 & klifa                 & 7.51 & guyard \\
+    3.43 & bousquet              & 6.25 & evry \\
+    3.33 & cotentin              & 6.23 & cohabiter \\
+    3.14 & simon                 & 5.30 & pays basque* \\
+    3.00 & sanctionn\'{e}        & 4.68 & littoral \\
+    2.85 & 9\`{e}me              & 4.24 & roussel \\
+    2.71 & confiance tour*       & 4.22 & eric \\
+    2.65 & rive                  & 4.21 & rassemblement d\'{e}mocrates* \\
+    2.55 & jean paul*            & 4.16 & upf \\
+    2.52 & 9\`{e}me circonscription* & 4.07 & basque \\
+    2.43 & rosi\`{e}res          & 3.95 & debr\'{e} \\
+    2.39 & martiniquais          & 3.77 & choix dimanche* \\
+    2.37 & union nationale*      & 3.65 & tgv \\
+    2.36 & zimmermann            & 3.61 & salles \\
+    2.28 & plaine                & 3.59 & w\"{a}hlen \\
+    2.22 & 3\`{e}me circonscription* & 3.45 & union opposition* \\
+    2.21 & ich                   & 3.42 & regroupement familial* \\
+    2.19 & planteurs             & 3.41 & acad\'{e}mie \\
     \bottomrule
   \end{tabular}
 \end{table}

@@ -14,27 +14,53 @@ Raw texts are in `text_files/` as zip archives. Run `python extract_text.py` to 
 
 ## Pipeline
 
-```
+```bash
+# 1. Build the corpus and a first cleaned text column
 python src/data_preparation.py      # parse and aggregate multi-page documents
 python src/label_extraction.py      # extract party labels, clean text, split data
-python src/classification.py        # train TF-IDF baseline + fine-tune CamemBERT
-python src/political_mapping.py     # compute embeddings, t-SNE, cosine similarity
-python src/report_analysis.py       # additional stats for the report (text lengths, top features, confusion matrix)
+
+# 2. Train the initial two models (TF-IDF baseline on text_clean, CamemBERT fine-tuning)
+python src/classification.py
+
+# 3. Build the aggressively-cleaned column text_clean_v2 (stopwords, dates, toponyms, politician names)
+python src/preprocessing.py
+
+# 4. Re-evaluate TF-IDF with 5-fold CV, bootstrap CIs, and temporal splits
+python src/evaluation.py --text_col text_clean    --out data/results_tfidf_v1.txt
+python src/evaluation.py --text_col text_clean_v2 --out data/results_tfidf_v2.txt
+
+# 5. Data-efficient alternative: frozen sentence-CamemBERT + LogReg
+python src/political_mapping.py                   # produces document_embeddings.npy (one-time)
+python src/frozen_classifier.py
+
+# 6. Semantic mapping: UMAP, silhouette/Davies–Bouldin, per-party trajectories
+python src/semantic_mapping_v2.py
+
+# 7. Error analysis across both classifiers
+python src/error_analysis.py
 ```
 
 ## Main results
 
-| Model | Accuracy | Macro F1 | Weighted F1 |
-|-------|----------|----------|-------------|
-| TF-IDF + Logistic Regression | **0.84** | **0.80** | **0.85** |
-| CamemBERT (best run) | 0.71 | 0.65 | 0.72 |
+| Model | Test Acc | Macro F1 | CV Acc (5-fold) | Temporal ≤1981 → ≥1988 |
+|-------|----------|----------|------------------|-------------------------|
+| TF-IDF + LR (`text_clean`) | 0.841 | 0.795 | 0.835 ± 0.011 | 0.696 |
+| TF-IDF + LR (`text_clean_v2`) | **0.842** | 0.794 | **0.850 ± 0.010** | **0.723** |
+| CamemBERT fine-tuned (run 2) | 0.710 | 0.650 | – | – |
+| sentence-CamemBERT frozen + LR | 0.668 | 0.509 | 0.651 ± 0.010 | 0.422 |
 
-TF-IDF outperforms CamemBERT on every class. The signal is mostly lexical (specific keywords per political family), so a bag-of-words approach captures it well. Extrême gauche is the easiest to classify (F1 = 0.96) thanks to distinctive vocabulary ("travailleurs", class-struggle language), while Droite is the hardest (F1 = 0.60) due to vocabulary overlap with Gauche — the main confusion is 76 Gauche documents predicted as Droite.
+**Summary of findings (full narrative in the report):**
 
-Text length varies a lot across families: Extrême gauche averages ~6,700 words vs ~1,100 for Droite, which also contributes to the TF-IDF signal.
-
-For semantic mapping, sentence-transformer embeddings show that most parties have cosine similarity above 0.90. The RPCR (a regionalist party from New Caledonia) is the main outlier (0.70–0.78).
+- The baseline TF-IDF's 84% accuracy is partly built on dates, toponyms, and politician surnames, not on political vocabulary. A second cleaning pass (`text_clean_v2`) masks these categories and keeps accuracy essentially unchanged, but the top-20 features for Extrême gauche become unambiguously political (`travailleurs`, `patrons`, `bourgeoisie`, `révolutionnaires`, `payer`).
+- Residual leakage on the Droite and Extrême droite classes shifts from first-order (major dates/cities) to second-order (local candidates' surnames and minor cities). This is discussed both as a limitation and as a real feature of French legislative elections, which are candidate-centric.
+- A frozen sentence-CamemBERT encoder with a linear head (~4,100 trainable parameters) reaches only 67% test accuracy vs TF-IDF's 84%. Fine-tuning end-to-end (110M parameters on 3,163 training examples) reaches 71% but overfits. On this corpus, sparse lexical features beat contextual embeddings.
+- Temporal splits (train on earlier years, test on later ones) drop TF-IDF from 84% to 72% and the frozen head from 67% to 42%. Sentence embeddings are hit harder because topical content shifts more across eras than isolated ideological markers do.
+- Semantic mapping via sentence-CamemBERT, t-SNE, and UMAP shows overlapping political families in the embedding space (silhouette ≈ −0.02 on raw 1024-d embeddings, −0.10 on t-SNE, −0.16 on UMAP); Extrême gauche is the only reasonably tight cluster.
 
 ## Report
 
-The report is in `report/main.tex` (NeurIPS format). Figures are in `figures/`.
+The report (`report/main.tex`, NeurIPS format) compiles to `report/main.pdf`. Figures are shared between `figures/` (generated) and `report/figures/` (used at compile time).
+
+```bash
+cd report && pdflatex main.tex && pdflatex main.tex
+```

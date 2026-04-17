@@ -5,12 +5,12 @@
 \item {\bf Claims}
     \item[] Question: Do the main claims made in the abstract and introduction accurately reflect the paper's contributions and scope?
     \item[] Answer: \answerYes{}
-    \item[] Justification: The abstract and introduction clearly state the three contributions: labeled dataset construction, model comparison, and semantic mapping.
+    \item[] Justification: The abstract and introduction state the four contributions: labelled dataset construction, a before/after lexical-cleaning comparison that exposes what TF-IDF actually classifies on, a data-efficient frozen sentence-CamemBERT head as a parameter-matched control, and a temporal-split evaluation with quantitative clustering metrics on the semantic map.
 
 \item {\bf Limitations}
     \item[] Question: Does the paper discuss the limitations of the work performed by the authors?
     \item[] Answer: \answerYes{}
-    \item[] Justification: Section~6 discusses OCR quality, regex labeling noise, class imbalance, document truncation, and t-SNE interpretation caveats.
+    \item[] Justification: Section~6 discusses residual candidate/toponym leakage after v2 cleaning, regex labelling bias, uneven OCR quality, the 512-token truncation in fine-tuned CamemBERT, the absence of continued masked-language-model pretraining, and the length bias between political families.
 
 \item {\bf Theory assumptions and proofs}
     \item[] Answer: \answerNA{}
@@ -29,8 +29,8 @@
     \item[] Justification: Section~4 details all training parameters (learning rate, batch size, epochs, optimizer, TF-IDF settings).
 
 \item {\bf Experiment statistical significance}
-    \item[] Answer: \answerNo{}
-    \item[] Justification: We report single-run results without error bars due to computational constraints. The deterministic train/test split and fixed random seed ensure reproducibility.
+    \item[] Answer: \answerYes{}
+    \item[] Justification: TF-IDF and the frozen sentence-CamemBERT head are evaluated with 5-fold stratified cross-validation (mean $\pm$ s.d.\ reported) and with bootstrap 95\% confidence intervals on macro-F1 (1{,}000 resamples). Temporal generalisation is tested with three held-out-year splits (Table~7). CamemBERT fine-tuning uses a single seeded run because of training time.
 
 \item {\bf Experiments compute resources}
     \item[] Answer: \answerYes{}
