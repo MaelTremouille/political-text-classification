@@ -58,7 +58,7 @@ Our approach is as follows. First, we build a labeled dataset by extracting part
 %----------------------------------------------------------------------
 
 \paragraph{Text-based political analysis.}
-Using text to analyse political positions has been explored in several directions. \citet{laver2003extracting} proposed Wordscores, a method that scores words from reference texts with known political positions and then uses those scores to place new texts on a left--right scale; they tested it on British and Irish party manifestos. \citet{slapin2008scaling} followed up with Wordfish, which scales parties on a single ideological dimension from word frequencies alone, without reference texts. On the empirical-political-science side, the Manifesto Project~\citep{volkens2013manifesto} built a large hand-coded database of party platforms across many countries, which is still widely used. More recently, \citet{rheault2020word} trained word embeddings with party metadata on parliamentary debates from Britain, Canada and the US and showed that it captures ideological differences better than older bag-of-words baselines.
+Using text to analyse political positions has been explored in several directions. \citet{grimmer2013text} give a general overview of automatic content analysis methods for political texts, and insist on the need to validate any text-based measure against ground truth. \citet{laver2003extracting} proposed Wordscores, a method that scores words from reference texts with known political positions and then uses those scores to place new texts on a left--right scale; they tested it on British and Irish party manifestos. \citet{slapin2008scaling} followed up with Wordfish, which scales parties on a single ideological dimension from word frequencies alone, without reference texts. On the empirical-political-science side, the Manifesto Project~\citep{volkens2013manifesto} built a large hand-coded database of party platforms across many countries, which is still widely used. Closer to our setup, \citet{peterson2018classification} use the classification accuracy of a party-vs-party classifier on Westminster speeches as a direct measure of how polarised the two sides are, which we find useful as a reading of our own Gauche--Droite confusion rate. More recently, \citet{rheault2020word} trained word embeddings with party metadata on parliamentary debates from Britain, Canada and the US and showed that it captures ideological differences.
 
 What we do is somewhat related to Laver et al.\ and Slapin--Proksch, but instead of placing parties on a continuous scale we classify documents into four discrete families. We also work with French texts rather than English ones and we compare a TF-IDF baseline with a fine-tuned transformer and a frozen-encoder variant, which none of the above papers do.
 
@@ -453,10 +453,20 @@ Sciences~Po, CEVIPOF.
 \newblock \url{https://archelec.sciencespo.fr}.
 
 
+\bibitem[Grimmer and Stewart(2013)]{grimmer2013text}
+J.~Grimmer and B.~M. Stewart.
+\newblock Text as data: The promise and pitfalls of automatic content analysis methods for political texts.
+\newblock \emph{Political Analysis}, 21(3):267--297, 2013.
+
 \bibitem[Laver et~al.(2003)]{laver2003extracting}
 M.~Laver, K.~Benoit, and J.~Garry.
-\newblock Estimating policy positions from political texts using words as data.
+\newblock Extracting policy positions from political texts using words as data.
 \newblock \emph{American Political Science Review}, 97(2):311--331, 2003.
+
+\bibitem[Peterson and Spirling(2018)]{peterson2018classification}
+A.~Peterson and A.~Spirling.
+\newblock Classification accuracy as a substantive quantity of interest: Measuring polarization in {W}estminster speeches.
+\newblock \emph{Political Analysis}, 26(1):120--128, 2018.
 
 \bibitem[Slapin and Proksch(2008)]{slapin2008scaling}
 J.~B. Slapin and S.-O. Proksch.
